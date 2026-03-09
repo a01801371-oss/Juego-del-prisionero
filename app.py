@@ -683,61 +683,138 @@ def main():
     # ══════════════════════════════════════════════════════════════════
     st.divider()
     st.title("☢️ Estudio de Caso: Guerra Fría y la Carrera Armamentística")
-    st.markdown(
-        "**Modelo de Axelrod & Hamilton (1981)** — Estabilidad de la Cooperación bajo amenaza de Destrucción Mutua Asegurada (MAD)"
+    st.markdown("**Basado en Axelrod & Hamilton (1981)** — *The Evolution of Cooperation*")
+    st.info(
+        "🌍 **¿Qué estás viendo aquí?**  \n"
+        "Este simulador recrea la lógica nuclear de la Guerra Fría: dos superpotencias que pueden "
+        "**Cooperar** (mantener la paz) o **Atacar** (lanzar un misil). Si ambas atacan, es la "
+        "**Destrucción Mutua Asegurada (MAD)** — catástrofe para los dos. "
+        "Descubre qué estrategias logran mantener la paz y cuáles conducen al apocalipsis."
     )
 
-    # ── Parámetros fijos del escenario nuclear ──
+    # ── Parámetros fijos MAD ──
     GF_T, GF_R, GF_P, GF_S = 5, 3, -100, -150
 
-    col_info1, col_info2, col_info3, col_info4 = st.columns(4)
-    col_info1.metric("T — Traición nuclear", GF_T, help="Ventaja por primer ataque")
-    col_info2.metric("R — Cooperación (paz)", GF_R, help="Beneficio mutuo de no atacar")
-    col_info3.metric("P — Destrucción Mutua (MAD)", GF_P, help="Ambos atacan → catástrofe")
-    col_info4.metric("S — Indefensión total", GF_S, help="Pacifismo unilateral ante ataque")
+    st.markdown("### 💣 Matriz de Pagos Nuclear (fija)")
+    mc1, mc2, mc3, mc4 = st.columns(4)
+    mc1.metric("☢️ T — Primer ataque", GF_T,
+               help="Ventaja si solo TÚ atacas y el otro no")
+    mc2.metric("☮️ R — Paz mutua", GF_R,
+               help="Ambos cooperan → estabilidad y beneficio moderado")
+    mc3.metric("💥 P — Destrucción Mutua (MAD)", GF_P,
+               help="Ambos atacan → colapso total. -100 pts cada uno")
+    mc4.metric("🏳️ S — Indefensión", GF_S,
+               help="Tú cooperas, el otro ataca → quedas devastado. -150 pts")
 
+    st.warning(
+        "⚠️ **Nota clave:** En el torneo estándar, ALL-D parece una estrategia 'racional'. "
+        "Aquí verás por qué en un mundo nuclear esa lógica lleva a la catástrofe: "
+        "cuando todos desconfían, todos reciben **−100 puntos** por ronda."
+    )
     st.markdown("---")
 
-    # ── Controles del escenario ──
-    gf_col1, gf_col2, gf_col3 = st.columns([2, 2, 2])
+    # ── Controles en dos columnas ──
+    gf_left, gf_right = st.columns([3, 2])
 
-    with gf_col1:
-        gf_w = st.slider(
-            "🕰️ Sombra del Futuro (w)",
-            min_value=0.0, max_value=1.0, value=0.97, step=0.01,
-            key="gf_w",
-            help="Probabilidad de que haya otra interacción futura"
-        )
-        # Umbral teórico de Axelrod: w > (T-R)/(T-P)
-        w_threshold = (GF_T - GF_R) / (GF_T - GF_P)
-        if gf_w > w_threshold:
-            st.success(f"✅ Paz matemáticamente estable  (w={gf_w:.2f} > {w_threshold:.4f})")
-        else:
-            st.error(f"💥 Cooperación INESTABLE  (w={gf_w:.2f} ≤ {w_threshold:.4f})")
-        st.caption(f"Umbral teórico: w > (T−R)/(T−P) = ({GF_T}−{GF_R})/({GF_T}−({GF_P})) = **{w_threshold:.4f}**")
+    with gf_left:
+        st.markdown("### ⚙️ Configuración del Simulador")
 
-    with gf_col2:
-        gf_usa = st.selectbox("🇺🇸 EUA — Estrategia", STRATEGY_NAMES, index=0, key="gf_usa")
-        gf_urss = st.selectbox("🇷🇺 URSS — Estrategia",
-                               [s for s in STRATEGY_NAMES if s != gf_usa],
-                               index=1, key="gf_urss")
-
-    with gf_col3:
         gf_error = st.slider(
-            "🎲 Probabilidad de Error de Percepción",
+            "💨 Riesgo de Accidente Nuclear (Error de Percepción)",
             min_value=0.0, max_value=0.05, value=0.01, step=0.005,
             format="%.3f", key="gf_error",
-            help="Probabilidad de que un movimiento C se perciba como D (ruido)"
+            help=(
+                "Probabilidad de que una señal de COOPERAR sea malinterpretada como ATAQUE "
+                "por fallos técnicos o mala comunicación. "
+                "Ejemplo real: la crisis del misil soviético Petrov en 1983."
+            )
         )
-        gf_rounds = st.slider("Rondas por juego", 50, 500, 200, step=50, key="gf_rounds")
-        gf_games = st.slider("Juegos por par", 1, 10, 5, key="gf_games")
-        gf_run = st.button("☢️ Simular Escenario Nuclear", type="primary", use_container_width=True, key="gf_run")
+        if gf_error == 0:
+            st.caption("🔇 Sin ruido — comunicación perfecta entre superpotencias.")
+        elif gf_error <= 0.01:
+            st.caption("📡 Ruido bajo — canales diplomáticos funcionando.")
+        elif gf_error <= 0.03:
+            st.caption("⚡ Ruido moderado — tensión diplomática elevada.")
+        else:
+            st.caption("🚨 Ruido alto — al borde del accidente nuclear.")
+
+        gf_col_a, gf_col_b = st.columns(2)
+        with gf_col_a:
+            gf_rounds = st.slider("Rondas por juego", 50, 500, 200, step=50, key="gf_rounds")
+        with gf_col_b:
+            gf_games = st.slider("Juegos por par", 1, 10, 5, key="gf_games")
+
+        st.markdown("#### 🇺🇸 EUA  vs  🇷🇺 URSS — Simulador Directo")
+        col_usa, col_urss = st.columns(2)
+        with col_usa:
+            gf_usa = st.selectbox("🇺🇸 Estrategia EUA", STRATEGY_NAMES, index=0, key="gf_usa")
+        with col_urss:
+            gf_urss = st.selectbox("🇷🇺 Estrategia URSS",
+                                   [s for s in STRATEGY_NAMES if s != gf_usa],
+                                   index=1, key="gf_urss")
+
+        gf_run = st.button(
+            "☢️ Lanzar Simulación Round-Robin Nuclear",
+            type="primary", use_container_width=True, key="gf_run"
+        )
+
+    with gf_right:
+        st.markdown("### 📈 Análisis de Estabilidad — Sombra del Futuro (w)")
+        st.markdown(
+            "**w** representa la probabilidad de que haya *otra* interacción futura entre los bloques. "
+            "Axelrod demostró que si w es suficientemente alto, la cooperación se vuelve la estrategia dominante."
+        )
+        gf_w = st.slider(
+            "w — Probabilidad de interacción futura",
+            min_value=0.0, max_value=1.0, value=0.97, step=0.01,
+            key="gf_w"
+        )
+        # Umbral de Axelrod
+        w_threshold = (GF_T - GF_R) / (GF_T - GF_P)
+        st.markdown(f"**Fórmula del umbral:** `w > (T−R) / (T−P)`")
+        st.markdown(f"**Cálculo:** `w > ({GF_T}−{GF_R}) / ({GF_T}−({GF_P})) = {w_threshold:.4f}`")
+
+        if gf_w > w_threshold:
+            st.success(
+                f"✅ **LA PAZ ES POSIBLE**  \n"
+                f"w = {gf_w:.2f} supera el umbral mínimo de {w_threshold:.4f}.  \n"
+                f"Las estrategias cooperativas tienen ventaja evolutiva."
+            )
+        else:
+            st.error(
+                f"💥 **SISTEMA CONDENADO AL CONFLICTO**  \n"
+                f"w = {gf_w:.2f} está por debajo del umbral {w_threshold:.4f}.  \n"
+                f"No hay futuro suficiente para que valga la pena cooperar."
+            )
+
+        # Gauge visual simple
+        pct = min(gf_w / 1.0, 1.0)
+        threshold_pct = w_threshold
+        fig_gauge = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=gf_w,
+            domain={'x': [0, 1], 'y': [0, 1]},
+            title={'text': "w actual"},
+            gauge={
+                'axis': {'range': [0, 1]},
+                'bar': {'color': '#4488ff'},
+                'steps': [
+                    {'range': [0, w_threshold], 'color': '#440000'},
+                    {'range': [w_threshold, 1], 'color': '#004422'},
+                ],
+                'threshold': {
+                    'line': {'color': 'white', 'width': 3},
+                    'thickness': 0.75,
+                    'value': w_threshold
+                }
+            }
+        ))
+        fig_gauge.update_layout(height=220, margin=dict(l=10, r=10, t=30, b=10))
+        st.plotly_chart(fig_gauge, use_container_width=True)
 
     # ── Motor con ruido ──
     def play_game_noisy(s1, s2, rounds, T, R, P, S, w, error_prob):
-        """Juego con probabilidad de error de percepción."""
-        s1.reset()
-        s2.reset()
+        s1.reset(); s2.reset()
         score1, score2 = 0.0, 0.0
         h1, h2 = [], []
         for r in range(rounds):
@@ -745,38 +822,32 @@ def main():
                 break
             m1_real = s1.move()
             m2_real = s2.move()
-            # Ruido: C puede percibirse como D
-            m1_perceived_by_s2 = 'D' if (m1_real == 'C' and RNG.random() < error_prob) else m1_real
-            m2_perceived_by_s1 = 'D' if (m2_real == 'C' and RNG.random() < error_prob) else m2_real
+            m1_perceived = 'D' if (m1_real == 'C' and RNG.random() < error_prob) else m1_real
+            m2_perceived = 'D' if (m2_real == 'C' and RNG.random() < error_prob) else m2_real
             p1, p2 = get_payoff(m1_real, m2_real, T, R, P, S)
-            s1.update(m1_real, m2_perceived_by_s1)
-            s2.update(m2_real, m1_perceived_by_s2)
-            score1 += p1
-            score2 += p2
-            h1.append(m1_real)
-            h2.append(m2_real)
+            s1.update(m1_real, m2_perceived)
+            s2.update(m2_real, m1_perceived)
+            score1 += p1; score2 += p2
+            h1.append(m1_real); h2.append(m2_real)
         return score1, score2, h1, h2
 
     def run_gf_tournament(T, R, P, S, w, error_prob, games, rounds):
-        """Torneo completo bajo parámetros de Guerra Fría con ruido."""
         name_to_class = {s.name: s for s in ALL_STRATEGIES}
-        n = len(STRATEGY_NAMES)
         payoff_matrix = pd.DataFrame(
-            np.zeros((n, n)), index=STRATEGY_NAMES, columns=STRATEGY_NAMES
+            np.zeros((len(STRATEGY_NAMES), len(STRATEGY_NAMES))),
+            index=STRATEGY_NAMES, columns=STRATEGY_NAMES
         )
         total_scores = {name: 0.0 for name in STRATEGY_NAMES}
         h2h_store = {}
 
         for name1, name2 in itertools.combinations(STRATEGY_NAMES, 2):
-            gs1, gs2 = [], []
-            lh1, lh2 = [], []
+            gs1, gs2, lh1, lh2 = [], [], [], []
             for _ in range(games):
                 s1i = name_to_class[name1]()
                 s2i = name_to_class[name2]()
                 sc1, sc2, hh1, hh2 = play_game_noisy(s1i, s2i, rounds, T, R, P, S, w, error_prob)
                 rlen = len(hh1) if hh1 else 1
-                gs1.append(sc1 / rlen)
-                gs2.append(sc2 / rlen)
+                gs1.append(sc1 / rlen); gs2.append(sc2 / rlen)
                 lh1, lh2 = hh1, hh2
             m1, m2 = np.mean(gs1), np.mean(gs2)
             payoff_matrix.loc[name1, name2] = m1
@@ -785,12 +856,10 @@ def main():
             total_scores[name2] += m2
             h2h_store[(name1, name2)] = (lh1, lh2)
 
-        # Self-play diagonal
         for name in STRATEGY_NAMES:
             sc_list = []
             for _ in range(games):
-                s1i = name_to_class[name]()
-                s2i = name_to_class[name]()
+                s1i = name_to_class[name](); s2i = name_to_class[name]()
                 sc1, sc2, _, _ = play_game_noisy(s1i, s2i, rounds, T, R, P, S, w, error_prob)
                 rlen = max(len(s1i.my_history), 1)
                 sc_list.append((sc1 + sc2) / 2 / rlen)
@@ -803,61 +872,62 @@ def main():
         ranking.index += 1
         return payoff_matrix, ranking, h2h_store
 
-    # ── Estado de sesión para GF ──
+    # ── Estado de sesión ──
     if 'gf_results' not in st.session_state:
         st.session_state.gf_results = None
 
     if gf_run:
-        with st.spinner("☢️ Simulando escenario de Guerra Fría..."):
+        with st.spinner("☢️ Simulando torneo Round-Robin nuclear... esto puede tomar unos segundos."):
             gf_pm, gf_rank, gf_h2h = run_gf_tournament(
                 GF_T, GF_R, GF_P, GF_S, gf_w, gf_error, gf_games, gf_rounds
             )
         st.session_state.gf_results = {
-            'payoff_matrix': gf_pm,
-            'ranking': gf_rank,
-            'h2h': gf_h2h,
-            'usa': gf_usa,
-            'urss': gf_urss,
+            'payoff_matrix': gf_pm, 'ranking': gf_rank,
+            'h2h': gf_h2h, 'usa': gf_usa, 'urss': gf_urss,
         }
-        st.success("✅ Simulación completada.")
+        st.success("✅ Simulación completada — explora los resultados en las pestañas.")
 
-    # ── Sub-pestañas ──
+    # ── Sub-pestañas de resultados ──
     if st.session_state.gf_results:
-        gfr = st.session_state.gf_results
-        gf_pm   = gfr['payoff_matrix']
-        gf_rank = gfr['ranking']
-        gf_h2h  = gfr['h2h']
+        gfr      = st.session_state.gf_results
+        gf_pm    = gfr['payoff_matrix']
+        gf_rank  = gfr['ranking']
+        gf_h2h   = gfr['h2h']
         usa_name  = gfr['usa']
         urss_name = gfr['urss']
 
         gf_tab1, gf_tab2, gf_tab3, gf_tab4 = st.tabs([
-            "📊 Ranking de Supervivencia",
-            "🔥 Heatmap de Colisión",
-            "⚔️ Duelo Head-to-Head",
-            "📈 Distribución de Resultados",
+            "🏆 Ranking de Supervivencia",
+            "🔥 Heatmap de Conflictos",
+            "⚔️ Simulador EUA vs URSS",
+            "📈 Análisis de Estabilidad",
         ])
 
         # ── Sub-tab 1: Ranking ──
         with gf_tab1:
-            st.subheader("📊 Ranking de Supervivencia Nuclear")
-            st.caption("Scores bajo MAD (P=−100). Las estrategias agresivas colapsan el sistema.")
+            st.subheader("🏆 Ranking de Supervivencia Nuclear")
+            st.markdown(
+                "¿Qué estrategia **sobrevive** cuando una traición puede costar −100 puntos? "
+                "Las estrategias agresivas que funcionan en el torneo estándar aquí **colapsan el sistema**."
+            )
 
             top3 = gf_rank.head(3)
             cols = st.columns(3)
             medals = ["🥇", "🥈", "🥉"]
+            labels = ["🕊️ Mejor Pacificador", "🛡️ Defensa Estable", "⚖️ Equilibrio Frágil"]
             for i, (_, row) in enumerate(top3.iterrows()):
                 with cols[i]:
                     delta_color = "normal" if row['Score de Supervivencia'] > 0 else "inverse"
                     st.metric(
-                        label=f"{medals[i]} #{i+1}",
+                        label=f"{medals[i]} {labels[i]}",
                         value=row['Estrategia'],
-                        delta=f"{row['Score de Supervivencia']:.2f}",
+                        delta=f"Score: {row['Score de Supervivencia']:.2f}",
                         delta_color=delta_color
                     )
 
             st.divider()
 
-            # Colorear filas según score positivo/negativo
+            # Colorear filas
             def color_score(val):
                 if val > 0:
                     return 'background-color: rgba(0,200,100,0.25)'
@@ -866,52 +936,73 @@ def main():
                 return ''
 
             display_rank = gf_rank.copy()
+            display_rank['Estado'] = display_rank['Score de Supervivencia'].apply(
+                lambda s: '☮️ Paz' if s > 0 else ('⚠️ Tensión' if s > -20 else '💥 Colapso MAD')
+            )
             display_rank.index = display_rank.index.map(lambda x: f"#{x}")
             st.dataframe(
                 display_rank.style.applymap(color_score, subset=['Score de Supervivencia']),
                 use_container_width=True
             )
-            st.info("🟢 Score positivo = cooperación predominó  |  🔴 Score muy negativo = espiral de defecciones (MAD activado)")
+            st.info(
+                "🟢 **Score positivo** → La estrategia mantuvo la paz y acumuló puntos.  \n"
+                "🔴 **Score muy negativo** → Entró en una espiral de defección mutua (MAD activado).  \n"
+                "💡 *Fíjate cómo ALL-D, que parece 'racional', destruye a todos — incluyéndose a sí misma.*"
+            )
 
         # ── Sub-tab 2: Heatmap ──
         with gf_tab2:
-            st.subheader("🔥 Heatmap de Colisión Nuclear")
-            st.caption("Escala rojo-negro: valores extremadamente negativos indican destrucción mutua.")
+            st.subheader("🔥 Heatmap de Conflictos Nucleares")
+            st.markdown(
+                "Cada celda muestra el **pago promedio** que recibe la estrategia de la fila "
+                "cuando juega contra la estrategia de la columna.  \n"
+                "🟢 **Azul/Verde** = zona de paz y cooperación  |  🔴 **Rojo/Negro** = zona de guerra nuclear"
+            )
 
             fig_gf_heat = go.Figure(data=go.Heatmap(
                 z=gf_pm.values,
                 x=gf_pm.columns.tolist(),
                 y=gf_pm.index.tolist(),
                 colorscale=[
-                    [0.0,  '#0d0000'],
-                    [0.25, '#5c0000'],
-                    [0.5,  '#990000'],
-                    [0.75, '#cc3300'],
-                    [0.9,  '#ff6600'],
-                    [1.0,  '#00cc44'],
+                    [0.0,   '#0a0000'],
+                    [0.2,   '#5c0000'],
+                    [0.4,   '#990000'],
+                    [0.6,   '#cc3300'],
+                    [0.75,  '#ff8800'],
+                    [0.88,  '#ffdd00'],
+                    [1.0,   '#00cc88'],
                 ],
                 hovertemplate=(
-                    "<b>%{y}</b> vs <b>%{x}</b><br>"
-                    "Pago promedio: <b>%{z:.2f}</b><extra></extra>"
+                    "<b>%{y}</b> jugando contra <b>%{x}</b><br>"
+                    "Pago promedio por ronda: <b>%{z:.2f}</b><br>"
+                    "<i>Valores negativos = MAD activado</i><extra></extra>"
                 ),
                 text=np.round(gf_pm.values, 1),
                 texttemplate="%{text}",
                 showscale=True,
-                colorbar=dict(title="Pago<br>promedio"),
+                colorbar=dict(
+                    title="Pago<br>promedio",
+                    tickvals=[gf_pm.values.min(), 0, gf_pm.values.max()],
+                    ticktext=["💥 MAD", "0", "☮️ Paz"]
+                ),
             ))
             fig_gf_heat.update_layout(
-                height=620,
-                xaxis_title="Oponente",
-                yaxis_title="Estrategia",
+                height=640,
+                xaxis_title="Estrategia Oponente →",
+                yaxis_title="← Mi Estrategia",
                 font=dict(size=10),
-                paper_bgcolor='rgba(10,10,10,0.0)',
                 margin=dict(l=20, r=20, t=40, b=20),
             )
             st.plotly_chart(fig_gf_heat, use_container_width=True)
+            st.caption("💡 Pasa el cursor sobre cualquier celda para ver el detalle del enfrentamiento.")
 
-        # ── Sub-tab 3: Duelo H2H ──
+        # ── Sub-tab 3: Simulador EUA vs URSS ──
         with gf_tab3:
-            st.subheader(f"⚔️ Duelo: 🇺🇸 {usa_name}  vs  🇷🇺 {urss_name}")
+            st.subheader(f"⚔️ Simulador: 🇺🇸 {usa_name}  vs  🇷🇺 {urss_name}")
+            st.markdown(
+                "La gráfica de **Puntos de Supervivencia** muestra el score acumulado de cada bloque. "
+                "Cuando hay traiciones, la curva **cae en picada** — visualmente verás el costo del conflicto nuclear."
+            )
 
             key_pair = (usa_name, urss_name) if (usa_name, urss_name) in gf_h2h else (urss_name, usa_name)
             if key_pair in gf_h2h:
@@ -921,157 +1012,198 @@ def main():
 
                 r_len = len(hh1)
                 rounds_idx = list(range(1, r_len + 1))
-                h1_num = [1 if m == 'C' else 0 for m in hh1]
-                h2_num = [1 if m == 'C' else 0 for m in hh2]
 
-                # Score acumulado
-                T_p, R_p, P_p, S_p = GF_T, GF_R, GF_P, GF_S
+                # Score acumulado con caídas visibles
                 cum1, cum2 = [], []
                 acc1 = acc2 = 0
                 for m1, m2 in zip(hh1, hh2):
-                    p1, p2 = get_payoff(m1, m2, T_p, R_p, P_p, S_p)
+                    p1, p2 = get_payoff(m1, m2, GF_T, GF_R, GF_P, GF_S)
                     acc1 += p1; acc2 += p2
                     cum1.append(acc1); cum2.append(acc2)
 
-                fig_duel = make_subplots(
-                    rows=2, cols=1,
-                    subplot_titles=["Acciones por Ronda (C=1 / D=0)", "Score Acumulado"],
-                    vertical_spacing=0.12
+                # Detectar rondas de conflicto
+                conflict_rounds = [i+1 for i, (m1, m2) in enumerate(zip(hh1, hh2))
+                                   if m1 == 'D' or m2 == 'D']
+
+                fig_surv = go.Figure()
+                # Zonas de conflicto como barras de fondo
+                for cr in conflict_rounds[:50]:  # limitar para performance
+                    fig_surv.add_vrect(
+                        x0=cr-0.5, x1=cr+0.5,
+                        fillcolor="rgba(255,0,0,0.08)", line_width=0
+                    )
+                fig_surv.add_trace(go.Scatter(
+                    x=rounds_idx, y=cum1, mode='lines',
+                    name=f"🇺🇸 {usa_name} — Puntos de Supervivencia",
+                    line=dict(color='#4499ff', width=2.5),
+                    hovertemplate="Ronda %{x}<br>Puntos acumulados EUA: <b>%{y}</b><extra></extra>"
+                ))
+                fig_surv.add_trace(go.Scatter(
+                    x=rounds_idx, y=cum2, mode='lines',
+                    name=f"🇷🇺 {urss_name} — Puntos de Supervivencia",
+                    line=dict(color='#ff4444', width=2.5, dash='dash'),
+                    hovertemplate="Ronda %{x}<br>Puntos acumulados URSS: <b>%{y}</b><extra></extra>"
+                ))
+                fig_surv.add_hline(y=0, line_color='rgba(255,255,255,0.3)',
+                                   line_dash='dot', annotation_text="Umbral 0")
+                fig_surv.update_layout(
+                    height=380,
+                    title="📉 Puntos de Supervivencia Acumulados (caídas = conflicto nuclear)",
+                    xaxis_title="Ronda",
+                    yaxis_title="Puntos acumulados",
+                    legend=dict(orientation='h', y=1.12),
+                    margin=dict(l=20, r=20, t=60, b=20),
                 )
-                fig_duel.add_trace(go.Scatter(
+                st.plotly_chart(fig_surv, use_container_width=True)
+
+                # Gráfica de acciones C/D
+                h1_num = [1 if m == 'C' else 0 for m in hh1]
+                h2_num = [1 if m == 'C' else 0 for m in hh2]
+                fig_actions = go.Figure()
+                fig_actions.add_trace(go.Scatter(
                     x=rounds_idx, y=h1_num, mode='lines+markers',
                     name=f"🇺🇸 {usa_name}",
-                    line=dict(color='#4488ff'),
-                    marker=dict(symbol=['circle' if m == 'C' else 'x' for m in hh1], size=5),
-                    hovertemplate="Ronda %{x}: %{customdata}<extra></extra>",
-                    customdata=hh1
-                ), row=1, col=1)
-                fig_duel.add_trace(go.Scatter(
+                    line=dict(color='#4499ff'),
+                    marker=dict(symbol=['circle' if m=='C' else 'x' for m in hh1], size=5),
+                    customdata=hh1,
+                    hovertemplate="Ronda %{x}: <b>%{customdata}</b><extra></extra>"
+                ))
+                fig_actions.add_trace(go.Scatter(
                     x=rounds_idx, y=h2_num, mode='lines+markers',
                     name=f"🇷🇺 {urss_name}",
                     line=dict(color='#ff4444', dash='dash'),
-                    marker=dict(symbol=['circle' if m == 'C' else 'x' for m in hh2], size=5),
-                    hovertemplate="Ronda %{x}: %{customdata}<extra></extra>",
-                    customdata=hh2
-                ), row=1, col=1)
-                fig_duel.add_trace(go.Scatter(
-                    x=rounds_idx, y=cum1, mode='lines',
-                    name=f"Score {usa_name}",
-                    line=dict(color='#4488ff', width=2),
-                    showlegend=False
-                ), row=2, col=1)
-                fig_duel.add_trace(go.Scatter(
-                    x=rounds_idx, y=cum2, mode='lines',
-                    name=f"Score {urss_name}",
-                    line=dict(color='#ff4444', width=2, dash='dash'),
-                    showlegend=False
-                ), row=2, col=1)
-
-                fig_duel.update_yaxes(tickvals=[0, 1], ticktext=['D', 'C'], row=1, col=1)
-                fig_duel.update_xaxes(title_text="Ronda", row=2, col=1)
-                fig_duel.update_layout(
-                    height=520,
-                    legend=dict(orientation='h', y=1.08),
+                    marker=dict(symbol=['circle' if m=='C' else 'x' for m in hh2], size=5),
+                    customdata=hh2,
+                    hovertemplate="Ronda %{x}: <b>%{customdata}</b><extra></extra>"
+                ))
+                fig_actions.update_layout(
+                    height=260,
+                    title="🎯 Acciones por Ronda  (C = Cooperar / D = Atacar)",
+                    yaxis=dict(tickvals=[0,1], ticktext=['💣 D — Ataca', '☮️ C — Coopera']),
+                    xaxis_title="Ronda",
+                    legend=dict(orientation='h', y=1.15),
                     margin=dict(l=20, r=20, t=60, b=20),
                 )
-                st.plotly_chart(fig_duel, use_container_width=True)
+                st.plotly_chart(fig_actions, use_container_width=True)
 
-                # Métricas finales
-                mc1, mc2, mc3, mc4 = st.columns(4)
-                mc1.metric(f"% C  🇺🇸 {usa_name}", f"{hh1.count('C')/r_len*100:.1f}%")
-                mc2.metric(f"% C  🇷🇺 {urss_name}", f"{hh2.count('C')/r_len*100:.1f}%")
-                mc3.metric("Score final EUA", f"{cum1[-1]:.0f}" if cum1 else "—")
-                mc4.metric("Score final URSS", f"{cum2[-1]:.0f}" if cum2 else "—")
+                # Métricas del resultado
+                st.markdown("#### 📊 Resultado Final del Enfrentamiento")
+                rc1, rc2, rc3, rc4 = st.columns(4)
+                rc1.metric(f"☮️ % Paz EUA", f"{hh1.count('C')/r_len*100:.1f}%")
+                rc2.metric(f"☮️ % Paz URSS", f"{hh2.count('C')/r_len*100:.1f}%")
+                rc3.metric("🇺🇸 Puntos EUA", f"{cum1[-1]:.0f}" if cum1 else "—")
+                rc4.metric("🇷🇺 Puntos URSS", f"{cum2[-1]:.0f}" if cum2 else "—")
 
-                # Diagnóstico de resultado
+                # Diagnóstico narrativo
                 c_rate = (hh1.count('C') + hh2.count('C')) / (2 * r_len)
                 if c_rate > 0.85:
-                    st.success("☮️ **Paz estable** — cooperación predominó en ambos bloques.")
+                    st.success(
+                        "☮️ **Paz estable alcanzada** — Ambos bloques cooperaron la mayor parte del tiempo. "
+                        "Esta combinación de estrategias podría haber evitado la Guerra Fría."
+                    )
                 elif c_rate > 0.5:
-                    st.warning("⚠️ **Tensión moderada** — cooperación frágil con episodios de defección.")
+                    st.warning(
+                        "⚠️ **Paz frágil** — Hubo cooperación, pero también episodios de tensión. "
+                        "Un pequeño error de percepción podría haber detonado el conflicto."
+                    )
                 else:
-                    st.error("💥 **Espiral de destrucción** — defección dominó. MAD activado.")
+                    st.error(
+                        "💥 **Espiral de destrucción nuclear** — La desconfianza se propagó y ambos bloques "
+                        "entraron en conflicto continuo. MAD activado: todos pierden masivamente."
+                    )
 
-        # ── Sub-tab 4: Distribución ──
+        # ── Sub-tab 4: Análisis de Estabilidad ──
         with gf_tab4:
-            st.subheader("📈 Distribución de Scores — Escenario Nuclear")
-            st.caption("La polarización revela paz total vs colapso por destrucción mutua.")
+            st.subheader("📈 Análisis de Estabilidad del Sistema")
+            st.markdown(
+                "¿Cuántas estrategias lograron mantener la paz? ¿Cuántas colapsaron? "
+                "Esta gráfica muestra la **polarización total** del sistema nuclear."
+            )
 
             scores_gf = gf_rank['Score de Supervivencia'].tolist()
             names_gf  = gf_rank['Estrategia'].tolist()
+            bar_colors = ['#00cc55' if s > 0 else ('#ff8800' if s > -20 else '#cc2200')
+                          for s in scores_gf]
 
-            # Colores: verde si positivo, rojo si negativo
-            bar_colors = ['#00cc55' if s > 0 else '#cc2200' for s in scores_gf]
-
-            fig_gf_hist = go.Figure()
-            fig_gf_hist.add_trace(go.Bar(
-                x=names_gf,
-                y=scores_gf,
+            fig_gf_dist = go.Figure()
+            fig_gf_dist.add_trace(go.Bar(
+                x=names_gf, y=scores_gf,
                 marker_color=bar_colors,
-                hovertemplate="<b>%{x}</b><br>Score: %{y:.2f}<extra></extra>"
+                hovertemplate="<b>%{x}</b><br>Score de supervivencia: <b>%{y:.2f}</b><extra></extra>"
             ))
-            fig_gf_hist.add_hline(
-                y=0, line_color='white', line_dash='dash', line_width=1,
-                annotation_text="Umbral 0", annotation_position="top right"
+            fig_gf_dist.add_hline(
+                y=0, line_color='white', line_dash='dash', line_width=1.5,
+                annotation_text="← Zona de PAZ  |  Zona de COLAPSO →",
+                annotation_position="top left"
             )
-            fig_gf_hist.update_layout(
-                height=450,
+            fig_gf_dist.update_layout(
+                height=420,
+                title="Distribución de Scores de Supervivencia — Escenario Nuclear MAD",
                 xaxis_title="Estrategia",
-                yaxis_title="Score de Supervivencia",
+                yaxis_title="Score Total de Supervivencia",
                 xaxis_tickangle=-30,
-                margin=dict(l=20, r=20, t=20, b=90),
+                margin=dict(l=20, r=20, t=60, b=90),
             )
-            st.plotly_chart(fig_gf_hist, use_container_width=True)
+            st.plotly_chart(fig_gf_dist, use_container_width=True)
 
-            # Estadísticas
-            st.subheader("Estadísticas del Escenario")
+            # Métricas de polarización
             positive = sum(1 for s in scores_gf if s > 0)
             negative = sum(1 for s in scores_gf if s <= 0)
-            sc1c, sc2c, sc3c = st.columns(3)
-            sc1c.metric("Estrategias con score positivo (paz)", positive)
-            sc2c.metric("Estrategias con score negativo (MAD)", negative)
-            sc3c.metric("Polarización (Máx − Mín)", f"{max(scores_gf) - min(scores_gf):.1f}")
+            polariz = max(scores_gf) - min(scores_gf)
 
+            pa, pb, pc, pd_ = st.columns(4)
+            pa.metric("☮️ Estrategias pacíficas", positive,
+                      help="Lograron score positivo — cooperación predominó")
+            pb.metric("💥 Estrategias que colapsaron", negative,
+                      help="Score negativo — entraron en espiral MAD")
+            pc.metric("📊 Polarización total", f"{polariz:.1f}",
+                      help="Diferencia entre la mejor y la peor estrategia")
+            pd_.metric("📉 Peor score (MAD máximo)", f"{min(scores_gf):.1f}",
+                       help="La estrategia más destructiva para el sistema")
+
+            if positive == 0:
+                st.error(
+                    "💀 **Sistema completamente colapsado** — Ninguna estrategia logró mantener la paz. "
+                    "Prueba aumentando el valor de **w** en los controles de arriba."
+                )
+            elif positive >= len(scores_gf) // 2:
+                st.success(
+                    f"🌍 **Sistema mayormente estable** — {positive} de {len(scores_gf)} estrategias "
+                    "mantuvieron la paz. La cooperación es evolutivamente viable en este escenario."
+                )
+            else:
+                st.warning(
+                    f"⚠️ **Sistema en equilibrio inestable** — Solo {positive} estrategias sobrevivieron "
+                    "positivamente. Una pequeña perturbación podría desencadenar el colapso global."
+                )
+
+            st.divider()
+            st.markdown("#### 📋 Tabla de Estadísticas del Escenario")
             stats_gf = pd.DataFrame({
-                'Métrica': ['Media', 'Mediana', 'Std', 'Mín (peor colapso)', 'Máx (mejor cooperación)'],
+                'Métrica': ['Score promedio', 'Score mediano', 'Desviación estándar',
+                            'Peor colapso (mín)', 'Mejor cooperación (máx)'],
                 'Valor': [
                     f"{np.mean(scores_gf):.3f}",
                     f"{np.median(scores_gf):.3f}",
                     f"{np.std(scores_gf):.3f}",
                     f"{np.min(scores_gf):.3f}",
                     f"{np.max(scores_gf):.3f}",
+                ],
+                'Interpretación': [
+                    'Promedio general del sistema',
+                    '50% de estrategias por encima de este valor',
+                    'Alta = sistema muy polarizado',
+                    'La estrategia que más destruyó el sistema',
+                    'La estrategia más eficaz para la paz',
                 ]
             })
             st.dataframe(stats_gf, use_container_width=True, hide_index=True)
 
     else:
-        st.info("☝️ Configura los parámetros del escenario y presiona **☢️ Simular Escenario Nuclear**.")
-
-    # ── Rúbrica de entrega ──
-    st.divider()
-    with st.expander("📋 Especificaciones del Entregable Final (Materia: Técnicas Computacionales Avanzadas)"):
-        st.markdown("""
-        ### Rúbrica de Entrega — Torneo del Dilema del Prisionero
-
-        | Criterio | Implementación |
-        |----------|---------------|
-        | **Modelo base** | Replicación exacta de Axelrod & Hamilton (1981) — *The Evolution of Cooperation* |
-        | **Estrategias** | 15 estrategias implementadas: TFT, GRIM, PAVLOV, ALL-D, ALL-C, TIT-FOR-TWO-TATS, RANDOM, JOSS, GRADUAL, ADAPTIVE, EVOLVED-NN (Red Neuronal 6→8→1), PSO-PLAYER, MEMORY-3, FRIEDMAN, TESTER |
-        | **Formato de torneo** | Round-Robin completo · 5 juegos por par · 200 rondas/juego (ajustable) |
-        | **Reproducibilidad** | `numpy.random.PCG64` con semilla fija `seed=42` |
-        | **Dashboard** | Streamlit interactivo con 5 pestañas principales + 1 pestaña de Estudio de Caso |
-        | **Visualizaciones** | Heatmap Plotly con hover · Ranking dinámico Top-3 · Head-to-Head ronda a ronda · Histograma de scores |
-        | **Escenario Guerra Fría** | Matriz MAD (P=−100, S=−150) · Análisis de la Sombra del Futuro · Ruido de percepción (0–5%) |
-        | **Sombra del Futuro** | Cálculo de umbral w > (T−R)/(T−P) con indicador visual de estabilidad cooperativa |
-        | **Validación** | Condición T > R > P ≥ S verificada en tiempo real con bloqueo de ejecución si no se cumple |
-        | **Modularidad** | Clase base `Strategy` · motor `play_game` / `run_tournament` separados del dashboard |
-
-        ---
-        **Conclusión teórica:** La cooperación emerge y se estabiliza cuando la sombra del futuro `w` supera el umbral
-        `(T−R)/(T−P)`. En el escenario nuclear (MAD), este umbral es extremadamente bajo (~0.02), lo que implica que
-        incluso con pocas interacciones futuras esperadas, la cooperación es la estrategia racionalmente dominante —
-        siempre que ambos actores utilicen estrategias con memoria como TIT FOR TAT o GRIM.
-        """)
+        st.info(
+            "☝️ **Configura los parámetros arriba y presiona '☢️ Lanzar Simulación Round-Robin Nuclear'** "
+            "para ver qué estrategias sobreviven en el escenario de la Guerra Fría."
+        )
 
 
 if __name__ == "__main__":
