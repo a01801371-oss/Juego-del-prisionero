@@ -110,7 +110,7 @@ class Random(Strategy):
 
 
 class Joss(Strategy):
-    """TIT FOR TAT pero defecciona con prob 0.1 tras cooperación del oponente."""
+    """TIT FOR TAT pero traiciona con prob 0.1 tras cooperación del oponente."""
     name = "JOSS"
     def move(self):
         if not self.opp_history:
@@ -121,7 +121,7 @@ class Joss(Strategy):
 
 
 class Gradual(Strategy):
-    """Coopera hasta que el oponente defecciona; entonces defecciona N veces (N = total defecciones del oponente), luego dos C."""
+    """Coopera hasta que el oponente traiciona; entonces traiciona N veces (N = total traiciones del oponente), luego dos C."""
     name = "GRADUAL"
     def __init__(self):
         super().__init__()
@@ -249,7 +249,7 @@ class Memory3(Strategy):
 
 
 class Friedman(Strategy):
-    """Alias de GRIM con lógica idéntica (defección permanente tras primer D)."""
+    """Alias de GRIM con lógica idéntica (traición permanente tras primer D)."""
     name = "FRIEDMAN"
 
     def __init__(self):
@@ -267,7 +267,7 @@ class Friedman(Strategy):
 
 
 class Tester(Strategy):
-    """Defecciona en ronda 1; si el oponente perdona, explota; si no, usa TFT."""
+    """Traiciona en ronda 1; si el oponente perdona, lo explota; si no, usa TFT."""
     name = "TESTER"
 
     def __init__(self):
@@ -647,20 +647,20 @@ def main():
             st.subheader("ℹ️ Descripción de Estrategias")
             descriptions = {
                 "TIT FOR TAT": "Empieza cooperando y luego imita el último movimiento del oponente.",
-                "GRIM": "Coopera hasta que el oponente defecciona; luego defecciona para siempre.",
+                "GRIM": "Coopera hasta que el oponente traiciona; luego traiciona para siempre.",
                 "PAVLOV": "Repite su acción si ganó, cambia si perdió (Win-Stay, Lose-Shift).",
-                "ALL-D": "Siempre defecciona.",
+                "ALL-D": "Siempre traiciona.",
                 "ALL-C": "Siempre coopera.",
-                "TIT FOR TWO TATS": "Solo defecciona si el oponente defeccionó dos veces seguidas.",
-                "RANDOM": "Coopera o defecciona aleatoriamente con prob. 50/50.",
+                "TIT FOR TWO TATS": "Solo traiciona si el oponente traicionó dos veces seguidas.",
+                "RANDOM": "Coopera o traiciona aleatoriamente con prob. 50/50.",
                 "JOSS": "Como TFT pero traiciona con probabilidad 0.1 tras cooperación del oponente.",
-                "GRADUAL": "Tras cada defección del oponente, castiga N veces (N = total D del oponente) y luego calma.",
+                "GRADUAL": "Tras cada traición del oponente, castiga N veces (N = total traiciones del oponente) y luego calma.",
                 "ADAPTIVE": "Empieza con secuencia CCCCCDDDDD; luego elige la acción con mayor payoff histórico.",
                 "EVOLVED-NN": "Red neuronal de 2 capas (6→8→1) que usa las últimas 3 jugadas de cada jugador como input.",
                 "PSO-PLAYER": "Usa probabilidades de cooperación optimizadas por PSO según el último par (mi acción, acción oponente).",
-                "MEMORY-3": "Defecciona si el oponente defeccionó ≥2 veces en las últimas 3 rondas.",
-                "FRIEDMAN": "Idéntico a GRIM: defección permanente tras el primer D del oponente.",
-                "TESTER": "Defecciona en ronda 1; si el oponente perdona, lo explota; si responde, usa TFT.",
+                "MEMORY-3": "Traiciona si el oponente traicionó ≥2 veces en las últimas 3 rondas.",
+                "FRIEDMAN": "Idéntico a GRIM: traición permanente tras el primer D del oponente.",
+                "TESTER": "Traiciona en ronda 1; si el oponente perdona, lo explota; si responde, usa TFT.",
             }
             for name, desc in descriptions.items():
                 if name in selected:
