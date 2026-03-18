@@ -471,15 +471,13 @@ def simulate_ipd(
     T: float, R: float, P: float, S: float,
     flow_thresh:  float,
     stor_thresh:  float,
-    eu_strategy:  str,          # "Histórico" | nombre de estrategia
+    eu_strategy:  str,
     date_start:   pd.Timestamp,
     date_end:     pd.Timestamp,
+    ru_strategy:  str = "Datos Históricos",
 ) -> pd.DataFrame:
     """
-    Núcleo del simulador interactivo.
-    Genera una fila por día con las movidas, scores y métricas económicas.
-    La movida de Rusia siempre viene de los datos reales.
-    La movida de la UE puede ser histórica o una estrategia del simulador (modo What-if).
+    Motor del simulador. ru_strategy controla a Rusia; eu_strategy controla a la UE.
     """
     # ── Filtrar por rango de fechas ──
     daily = df_daily[
@@ -495,10 +493,34 @@ def simulate_ipd(
     if daily.empty:
         return pd.DataFrame()
 
-    # ── Movida Rusia: siempre de datos reales ──
-    daily["move_russia"] = daily["Russia"].apply(
+    # ── Movida Rusia (histórica o estrategia simulada) ──
+    daily["move_russia_hist"] = daily["Russia"].apply(
         lambda x: "C" if (pd.notna(x) and float(x) > flow_thresh) else "D"
     )
+    if ru_strategy == "Datos Históricos":
+        daily["move_russia"] = daily["move_russia_hist"]
+    else:
+        _ru_cls = {"Tit-for-Tat": TitForTat, "Always Defect": AllD, "Bully": Tester}
+        _cls = _ru_cls.get(ru_strategy)
+        if _cls:
+            _inst = _cls()
+            _stor_f = df_stor[(df_stor["Week"] >= date_start) & (df_stor["Week"] <= date_end)].copy()
+            if not _stor_f.empty:
+                _stor_f["_chg"] = _stor_f["Storage_pct"].pct_change() * 100
+                _stor_f["_eu"] = _stor_f["_chg"].apply(
+                    lambda x: "D" if (pd.notna(x) and x < -stor_thresh) else "C")
+                _sig = _stor_f[["Week","_eu"]].rename(columns={"Week":"Date"})
+                _eu_sig = pd.merge_asof(daily[["Date"]].sort_values("Date"),
+                                        _sig.sort_values("Date"), on="Date",
+                                        direction="backward")["_eu"].fillna("C").tolist()
+            else:
+                _eu_sig = ["C"] * len(daily)
+            _moves = []
+            for _s in _eu_sig:
+                _m = _inst.move(); _moves.append(_m); _inst.update(_m, _s)
+            daily["move_russia"] = _moves
+        else:
+            daily["move_russia"] = daily["move_russia_hist"]
 
     # ── Movida UE histórica: merge semanal → diario ──
     if not stor.empty:
@@ -914,6 +936,135 @@ def fig_whatif_comparison(df_hist: pd.DataFrame, df_whatif: pd.DataFrame,
 
 # ── Tab principal ──────────────────────────────────────────────────────────
 
+
+# ── Identificador de estrategia ───────────────────────────────────────────
+
+def identify_strategy(df_daily, df_stor, flow_thresh=300, stor_thresh=5.0,
+                      date_start=None, date_end=None):
+    """
+    Compara la secuencia histórica de movidas de Rusia con las 15 estrategias
+    del catálogo. Devuelve el % de coincidencia de cada una.
+    """
+    dd = df_daily.copy()
+    if date_start is not None: dd = dd[dd["Date"] >= date_start]
+    if date_end   is not None: dd = dd[dd["Date"] <= date_end]
+    dd = dd.reset_index(drop=True)
+    if dd.empty:
+        return {"scores": {}, "best": "—", "best_pct": 0.0, "top3": [], "n_days": 0}
+
+    hist_russia = dd["Russia"].apply(
+        lambda x: "C" if (pd.notna(x) and float(x) > flow_thresh) else "D"
+    ).tolist()
+
+    if df_stor is not None and not df_stor.empty:
+        sf = df_stor.copy()
+        if date_start is not None: sf = sf[sf["Week"] >= date_start]
+        if date_end   is not None: sf = sf[sf["Week"] <= date_end]
+        sf = sf.reset_index(drop=True)
+        sf["_chg"] = sf["Storage_pct"].pct_change() * 100
+        sf["_eu"] = sf["_chg"].apply(
+            lambda x: "D" if (pd.notna(x) and x < -stor_thresh) else "C")
+        sig = sf[["Week","_eu"]].rename(columns={"Week":"Date"})
+        eu_sig = pd.merge_asof(dd[["Date"]].sort_values("Date"),
+                               sig.sort_values("Date"), on="Date",
+                               direction="backward")["_eu"].fillna("C").tolist()
+    else:
+        eu_sig = ["C"] * len(hist_russia)
+
+    n = len(hist_russia)
+    scores = {}
+    for cls in ALL_STRATEGIES:
+        inst = cls()
+        matches = sum(
+            1 for actual, eu_s in zip(hist_russia, eu_sig)
+            if (lambda pred, a, e: (inst.update(a, e), pred == a)[1])(inst.move(), actual, eu_s)
+        )
+        # cleaner version
+        inst2 = cls(); m2 = 0
+        for actual, eu_s in zip(hist_russia, eu_sig):
+            pred = inst2.move()
+            if pred == actual: m2 += 1
+            inst2.update(actual, eu_s)
+        scores[cls.name] = round(m2 / n * 100, 1)
+
+    top = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    return {"scores": scores, "best": top[0][0], "best_pct": top[0][1],
+            "top3": top[:3], "n_days": n}
+
+
+def fig_strategy_detection(detection):
+    """Bar chart horizontal de similitud con las 15 estrategias."""
+    if not detection["scores"]:
+        return go.Figure()
+    items = sorted(detection["scores"].items(), key=lambda x: x[1], reverse=True)
+    names  = [x[0] for x in items]
+    values = [x[1] for x in items]
+    top3   = {x[0] for x in detection["top3"]}
+    colors = [
+        "#fbbf24" if names[0] == n else
+        "#38bdf8" if n in top3 else
+        "rgba(100,116,139,0.45)"
+        for n in names
+    ]
+    fig = go.Figure(go.Bar(
+        y=names, x=values, orientation="h",
+        marker=dict(color=colors, line=dict(color="rgba(255,255,255,0.05)", width=0.5)),
+        text=[f"{v:.1f}%" for v in values],
+        textposition="outside",
+        textfont=dict(size=9, color="#94a3b8"),
+        hovertemplate="<b>%{y}</b><br>Similitud: %{x:.1f}%<extra></extra>",
+    ))
+    fig.add_vline(x=50, line_dash="dot", line_color="rgba(255,255,255,0.18)",
+                  line_width=1, annotation_text="50%",
+                  annotation_font=dict(size=8, color="#64748b"))
+    fig.update_layout(
+        paper_bgcolor="#0a0e1a", plot_bgcolor="#0e1420",
+        font=dict(family="monospace", color="#e2e8f0", size=10),
+        height=max(300, len(names)*28+80),
+        title=dict(text="SIMILITUD CON LAS 15 ESTRATEGIAS — COMPORTAMIENTO HISTÓRICO DE RUSIA",
+                   font=dict(size=11), x=0),
+        xaxis=dict(range=[0, 115], gridcolor="rgba(255,255,255,0.04)",
+                   tickfont=dict(size=9), title="% coincidencia de movidas"),
+        yaxis=dict(autorange="reversed", tickfont=dict(size=9)),
+        margin=dict(l=12, r=80, t=48, b=12),
+    )
+    return fig
+
+
+def fig_russia_strategy_comparison(df_hist, df_wi, ru_strategy):
+    """Compara bienestar histórico vs estrategia alternativa de Rusia."""
+    fig = make_subplots(rows=1, cols=2,
+                        subplot_titles=[f"BIENESTAR RUSIA — Histórico vs {ru_strategy}",
+                                        f"BIENESTAR UE — Histórico vs {ru_strategy}"])
+    for ci, (player, col, ch, cwi) in enumerate([
+        ("Rusia","cum_ru","#f87171","#fca5a5"),
+        ("UE",   "cum_eu","#38bdf8","#7dd3fc"),
+    ], 1):
+        fig.add_trace(go.Scatter(x=df_hist["Date"], y=df_hist[col],
+            name=f"{player} — Histórico", mode="lines",
+            line=dict(color=ch, width=2.2),
+            hovertemplate=f"{player} hist: %{{y:,.0f}}<extra></extra>"), row=1, col=ci)
+        fig.add_trace(go.Scatter(x=df_wi["Date"], y=df_wi[col],
+            name=f"{player} — {ru_strategy}", mode="lines",
+            line=dict(color=cwi, width=2.2, dash="dash"),
+            fill="tonexty",
+            fillcolor=f"rgba({'248,113,113' if ci==1 else '56,189,248'},0.06)",
+            hovertemplate=f"{player} {ru_strategy}: %{{y:,.0f}}<extra></extra>"), row=1, col=ci)
+    fig.update_layout(
+        paper_bgcolor="#0a0e1a", plot_bgcolor="#0e1420",
+        font=dict(family="monospace", color="#e2e8f0", size=10),
+        height=320, hovermode="x unified",
+        title=dict(text=f"IMPACTO DE ESTRATEGIA RUSIA: HISTÓRICO vs {ru_strategy.upper()}",
+                   font=dict(size=11), x=0),
+        legend=dict(bgcolor="rgba(0,0,0,0.4)", borderwidth=0, font=dict(size=9)),
+        margin=dict(l=12, r=12, t=48, b=12),
+    )
+    fig.update_xaxes(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=9))
+    fig.update_yaxes(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=9))
+    return fig
+
+
+
 def render_energy_crisis_tab():
     """
     Dashboard interactivo de simulación: Crisis Energética Rusia–EU (2021–2026).
@@ -973,13 +1124,32 @@ def render_energy_crisis_tab():
         "Caída máx. almac. para C-UE (%)", 1.0, 15.0, 5.0, 0.5, key="ec_stor"
     )
 
-    # ── 4. MODO WHAT-IF ──────────────────────────────────────────────
-    st.sidebar.markdown("**🔮 Modo What-if — Estrategia UE**")
+    # ── 4. MODO WHAT-IF — Estrategia UE ─────────────────────────────
+    st.sidebar.markdown("**🔮 What-if — Estrategia UE**")
     whatif_options = ["Histórico (datos reales)"] + STRATEGY_NAMES
     eu_strategy = st.sidebar.selectbox(
         "¿Qué estrategia hubiera usado la UE?",
         whatif_options, index=0, key="ec_eu_strat",
     )
+
+    # ── 5. SELECTOR ESTRATEGIA RUSIA ─────────────────────────────────
+    st.sidebar.markdown("**🇷🇺 Simulación — Estrategia Rusia**")
+    ru_strategy = st.sidebar.selectbox(
+        "Comportamiento de Rusia",
+        ["Datos Históricos", "Tit-for-Tat", "Always Defect", "Bully"],
+        index=0, key="ec_ru_strat",
+        help=(
+            "Datos Históricos: flujos reales del CSV.\n"
+            "Tit-for-Tat: coopera primero, copia última movida UE.\n"
+            "Always Defect: defecta siempre.\n"
+            "Bully: defecta primero, explota si la UE cede, usa TFT si resiste."
+        ),
+    )
+    _ru_desc = {"Tit-for-Tat": "Coopera primero · copia la UE",
+                "Always Defect": "Defecta siempre · no negocia",
+                "Bully": "Defecta primero · explota si la UE cede"}
+    if ru_strategy in _ru_desc:
+        st.sidebar.caption(_ru_desc[ru_strategy])
 
     # ════════════════════════════════════════════════════════════════
     # CUERPO DEL TAB
@@ -1013,13 +1183,15 @@ def render_energy_crisis_tab():
             ec_T, ec_R, ec_P, ec_S,
             flow_thresh, stor_thresh,
             eu_strategy, date_start, date_end,
+            ru_strategy=ru_strategy,
         )
-        # También simulación histórica para comparación What-if
+        # Baseline histórico (Rusia y UE reales) para comparaciones
         df_hist = simulate_ipd(
             df_daily_full, df_stor_full,
             ec_T, ec_R, ec_P, ec_S,
             flow_thresh, stor_thresh,
             "Histórico (datos reales)", date_start, date_end,
+            ru_strategy="Datos Históricos",
         )
 
     if df_sim.empty:
@@ -1063,8 +1235,10 @@ def render_energy_crisis_tab():
     # SECCIÓN B: MÉTRICAS DEL PERÍODO SELECCIONADO
     # ════════════════════════════════════════════════════════════════
     st.markdown("---")
-    st.markdown(f"### 📊 Resultados — {date_range[0].strftime('%b %Y')} → {date_range[1].strftime('%b %Y')}"
-                + (f"  ·  UE: **{eu_strategy}**" if eu_strategy != "Histórico (datos reales)" else ""))
+    _hp = [f"### 📊 Resultados — {date_range[0].strftime('%b %Y')} → {date_range[1].strftime('%b %Y')}"]
+    if ru_strategy != "Datos Históricos":   _hp.append(f"  ·  🇷🇺 **{ru_strategy}**")
+    if eu_strategy != "Histórico (datos reales)": _hp.append(f"  ·  🇪🇺 **{eu_strategy}**")
+    st.markdown("".join(_hp))
 
     coop_ru  = (df_sim["move_russia"] == "C").mean() * 100
     coop_eu  = (df_sim["move_eu"]     == "C").mean() * 100
@@ -1109,12 +1283,29 @@ def render_energy_crisis_tab():
     # Impacto económico (se recalcula con los sliders de la matriz)
     st.plotly_chart(fig_economic_rolling(df_sim), use_container_width=True)
 
-    # What-if comparison
+    # What-if comparison (UE)
     if eu_strategy != "Histórico (datos reales)":
         st.plotly_chart(
             fig_whatif_comparison(df_hist, df_sim, eu_strategy),
             use_container_width=True,
         )
+
+    # Russia strategy comparison
+    if ru_strategy != "Datos Históricos":
+        st.markdown(f"#### 🇷🇺 Impacto de la estrategia de Rusia: **{ru_strategy}**")
+        st.plotly_chart(
+            fig_russia_strategy_comparison(df_hist, df_sim, ru_strategy),
+            use_container_width=True,
+        )
+        d_ru = df_sim["cum_ru"].iloc[-1] - df_hist["cum_ru"].iloc[-1]
+        d_eu = df_sim["cum_eu"].iloc[-1] - df_hist["cum_eu"].iloc[-1]
+        rd1, rd2 = st.columns(2)
+        rd1.metric(f"Δ Bienestar Rusia ({ru_strategy} vs histórico)",
+                   f"{d_ru:+,.0f} pts",
+                   delta_color="normal" if d_ru >= 0 else "inverse")
+        rd2.metric(f"Δ Bienestar UE ({ru_strategy} vs histórico)",
+                   f"{d_eu:+,.0f} pts",
+                   delta_color="normal" if d_eu >= 0 else "inverse")
 
     # Calendario de outcomes
     with st.expander("📅 Calendario de outcomes (heatmap mensual)", expanded=False):
@@ -1123,6 +1314,60 @@ def render_energy_crisis_tab():
     # ════════════════════════════════════════════════════════════════
     # SECCIÓN D: TABLA + DESCARGA
     # ════════════════════════════════════════════════════════════════
+    # ════════════════════════════════════════════════════════════════
+    # SECCIÓN E: IDENTIFICADOR DE ESTRATEGIA PREDOMINANTE
+    # ════════════════════════════════════════════════════════════════
+    st.markdown("---")
+    st.markdown("### 🔍 ¿A qué estrategia se parece Rusia?")
+    st.caption("Compara la secuencia histórica de movidas de Rusia con las 15 estrategias del catálogo.")
+
+    with st.spinner("Analizando comportamiento histórico…"):
+        detection = identify_strategy(
+            df_daily_full, df_stor_full,
+            flow_thresh=flow_thresh, stor_thresh=stor_thresh,
+            date_start=date_start, date_end=date_end,
+        )
+
+    if detection["n_days"] > 0:
+        det_c1, det_c2, det_c3 = st.columns(3)
+        for _col_d, (_sn, _pct), _lbl in zip(
+            [det_c1, det_c2, det_c3],
+            detection["top3"],
+            ["🥇 Más probable", "🥈 Segunda opción", "🥉 Tercera opción"],
+        ):
+            _col_d.metric(_lbl, _sn, f"{_pct:.1f}% coincidencia")
+
+        _bn, _bp = detection["best"], detection["best_pct"]
+        _bc = "#fbbf24" if _bp >= 70 else ("#38bdf8" if _bp >= 55 else "#94a3b8")
+        _conf = "Alta" if _bp >= 70 else ("Media" if _bp >= 55 else "Baja")
+        st.markdown(f"""
+        <div style="background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.22);
+                    border-radius:6px;padding:14px 18px;margin:10px 0;">
+          <p style="font-size:10px;letter-spacing:.12em;color:#64748b;
+                    text-transform:uppercase;margin:0 0 4px 0;">Detección de estrategia</p>
+          <p style="font-size:16px;font-weight:700;color:{_bc};margin:0 0 2px 0;">
+            La estrategia que más se parece al comportamiento histórico de Rusia es:
+            <span style="color:#e2e8f0;">{_bn}</span>
+          </p>
+          <p style="font-size:12px;color:#64748b;margin:0;">
+            Coincidencia: <b style="color:{_bc};">{_bp:.1f}%</b>
+            de {detection["n_days"]:,} días analizados · Confianza: <b>{_conf}</b>
+          </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.plotly_chart(fig_strategy_detection(detection), use_container_width=True)
+
+        with st.expander("ℹ️ ¿Cómo funciona la detección?", expanded=False):
+            st.markdown("""
+            1. Se extrae la secuencia real de movidas de Rusia del CSV (C si flujo > umbral).
+            2. Cada una de las 15 estrategias juega contra la señal histórica de la UE.
+            3. Se calcula qué % de rondas la estrategia habría tomado la misma decisión.
+            **Nota:** similitud de movidas ≠ intención estratégica.
+            """)
+    else:
+        st.warning("Sin datos en el período seleccionado.")
+
     st.markdown("---")
     with st.expander("📋 Traducción económica de la matriz actual", expanded=False):
         rows = []
