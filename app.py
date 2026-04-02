@@ -15,6 +15,7 @@ import os
 from typing import List, Tuple
 import warnings
 warnings.filterwarnings('ignore')
+from scipy import stats as _scipy_stats
 
 # ─────────────────────────────────────────────
 # RNG global con semilla fija (PCG64, seed=42)
@@ -1606,6 +1607,364 @@ def render_energy_crisis_tab():
     """, unsafe_allow_html=True)
 
 
+
+# ══════════════════════════════════════════════════════════════════════════
+#  ANÁLISIS ESTADÍSTICO — ANOVA DE UNA VÍA
+# ══════════════════════════════════════════════════════════════════════════
+
+def compute_anova(per_game_scores: dict) -> dict:
+    """
+    ANOVA de una vía sobre los scores individuales por partida.
+
+    H₀: Las medias de puntaje de todas las estrategias son iguales.
+    H₁: Al menos una media difiere significativamente.
+
+    Args:
+        per_game_scores: dict {nombre_estrategia: [score_partida_1, ...]}
+
+    Returns:
+        dict con F, p_value, tabla ANOVA, resumen descriptivo e interpretación.
+    """
+    groups = list(per_game_scores.values())
+    names  = list(per_game_scores.keys())
+
+    if len(groups) < 2 or any(len(g) < 2 for g in groups):
+        return {"error": "Se necesitan al menos 2 estrategias con ≥2 partidas cada una."}
+
+    F, p = _scipy_stats.f_oneway(*groups)
+
+    all_data   = np.concatenate(groups)
+    grand_mean = np.mean(all_data)
+    k = len(groups)
+    N = len(all_data)
+
+    SS_b = float(sum(len(g) * (np.mean(g) - grand_mean) ** 2 for g in groups))
+    SS_w = float(sum(np.sum((np.array(g) - np.mean(g)) ** 2) for g in groups))
+    SS_t = SS_b + SS_w
+    df_b, df_w = k - 1, N - k
+    MS_b = SS_b / df_b if df_b > 0 else 0
+    MS_w = SS_w / df_w if df_w > 0 else 0
+
+    anova_table = pd.DataFrame([
+        {"Fuente":    "Entre grupos (estrategias)",
+         "SS":        round(SS_b, 2),
+         "df":        df_b,
+         "MS":        round(MS_b, 4),
+         "F":         round(float(F), 4),
+         "p-valor":   f"{float(p):.2e}"},
+        {"Fuente":    "Dentro de grupos (error)",
+         "SS":        round(SS_w, 2),
+         "df":        df_w,
+         "MS":        round(MS_w, 4),
+         "F":         "—",
+         "p-valor":   "—"},
+        {"Fuente":    "Total",
+         "SS":        round(SS_t, 2),
+         "df":        N - 1,
+         "MS":        "—",
+         "F":         "—",
+         "p-valor":   "—"},
+    ])
+
+    desc_rows = []
+    for nm, g in zip(names, groups):
+        a = np.array(g)
+        desc_rows.append({
+            "Estrategia": nm,
+            "N":          len(a),
+            "Media":      round(float(np.mean(a)), 3),
+            "Desv. Std.": round(float(np.std(a, ddof=1)), 3),
+            "Mín.":       round(float(np.min(a)), 3),
+            "Máx.":       round(float(np.max(a)), 3),
+        })
+    desc_df = (pd.DataFrame(desc_rows)
+               .sort_values("Media", ascending=False)
+               .reset_index(drop=True))
+    desc_df.index = desc_df.index + 1
+
+    sig = bool(p < 0.05)
+    return {
+        "F":           float(F),
+        "p":           float(p),
+        "sig":         sig,
+        "anova_table": anova_table,
+        "desc_df":     desc_df,
+        "interp": (
+            "✅ Existen diferencias estadísticamente significativas entre las estrategias "
+            f"(F = {F:.4f}, p = {p:.2e} < 0.05). Se rechaza H₀ con 95 % de confianza."
+            if sig else
+            "⚠️ No se detectan diferencias significativas entre las estrategias "
+            f"(F = {F:.4f}, p = {p:.2e} ≥ 0.05). No hay evidencia suficiente para rechazar H₀."
+        ),
+        "n_strategies": k,
+        "n_games_total": N,
+    }
+
+
+def run_tournament_with_anova(selected_names, T, R, P, S, w, games=5, rounds=200):
+    """
+    Extiende run_tournament() para capturar scores individuales por partida,
+    necesarios para el análisis ANOVA.
+
+    Returns:
+        (payoff_matrix, ranking, h2h_data, per_game_scores)
+    """
+    name_to_class = {s.name: s for s in ALL_STRATEGIES}
+    strategies    = {n: name_to_class[n] for n in selected_names}
+    n             = len(selected_names)
+    payoff_matrix = pd.DataFrame(np.zeros((n, n)),
+                                 index=selected_names, columns=selected_names)
+    total_scores  = {name: 0.0 for name in selected_names}
+    h2h_data      = {}
+    per_game      = {name: [] for name in selected_names}   # ← para ANOVA
+
+    for name1, name2 in itertools.combinations(selected_names, 2):
+        cls1 = strategies[name1]; cls2 = strategies[name2]
+        gs1, gs2, lh1, lh2 = [], [], [], []
+        for _ in range(games):
+            sc1, sc2, h1, h2 = play_game(cls1(), cls2(), rounds, T, R, P, S, w)
+            rlen = max(len(h1), 1)
+            avg1 = sc1 / rlen; avg2 = sc2 / rlen
+            gs1.append(avg1); gs2.append(avg2)
+            per_game[name1].append(avg1)
+            per_game[name2].append(avg2)
+            lh1, lh2 = h1, h2
+        m1, m2 = float(np.mean(gs1)), float(np.mean(gs2))
+        payoff_matrix.loc[name1, name2] = m1
+        payoff_matrix.loc[name2, name1] = m2
+        total_scores[name1] += m1; total_scores[name2] += m2
+        h2h_data[(name1, name2)] = (lh1, lh2)
+
+    for name in selected_names:
+        cls = strategies[name]
+        sc_list = []
+        for _ in range(games):
+            sc1, sc2, _, _ = play_game(cls(), cls(), rounds, T, R, P, S, w)
+            rlen = max(1, rounds)
+            sc_list.append((sc1 + sc2) / 2 / rlen)
+        payoff_matrix.loc[name, name] = float(np.mean(sc_list))
+
+    ranking = (pd.DataFrame({"Estrategia": list(total_scores.keys()),
+                              "Score Total": list(total_scores.values())})
+               .sort_values("Score Total", ascending=False)
+               .reset_index(drop=True))
+    ranking.index += 1
+    return payoff_matrix, ranking, h2h_data, per_game
+
+
+def fig_anova_table(anova: dict) -> go.Figure:
+    """Tabla ANOVA formateada como figura Plotly (tema oscuro)."""
+    df = anova["anova_table"]
+    sig_color = "#34d399" if anova["sig"] else "#fbbf24"
+
+    fig = go.Figure(go.Table(
+        header=dict(
+            values=[f"<b>{c}</b>" for c in df.columns],
+            fill_color="rgba(14,20,45,0.95)",
+            font=dict(color="#e2e8f0", size=11, family="monospace"),
+            align="center", height=34,
+            line=dict(color="rgba(56,189,248,0.18)", width=1),
+        ),
+        cells=dict(
+            values=[df[c].tolist() for c in df.columns],
+            fill_color="rgba(8,11,18,0.92)",
+            font=dict(
+                color=["#e2e8f0", "#e2e8f0", "#e2e8f0",
+                       "#e2e8f0", sig_color, sig_color],
+                size=11, family="monospace",
+            ),
+            align=["left", "right", "right", "right", "right", "right"],
+            height=30,
+            line=dict(color="rgba(255,255,255,0.05)", width=1),
+        ),
+    ))
+    fig.update_layout(
+        paper_bgcolor="#080b12",
+        title=dict(
+            text=(f"ANOVA DE UNA VÍA  ·  F = {anova['F']:.4f}  ·  "
+                  f"p = {anova['p']:.2e}  ·  "
+                  f"{'Significativo ✅' if anova['sig'] else 'No significativo ⚠️'}"),
+            font=dict(size=12, color="#e2e8f0", family="monospace"),
+            x=0,
+        ),
+        margin=dict(l=8, r=8, t=56, b=8),
+        height=210,
+    )
+    return fig
+
+
+def fig_desc_table(anova: dict) -> go.Figure:
+    """Tabla descriptiva por estrategia (Media, Std, N) con ranking visual."""
+    df = anova["desc_df"].copy()
+    n  = len(df)
+    row_fills = []
+    for i in range(n):
+        if i == 0:   row_fills.append("rgba(255,215,0,0.14)")
+        elif i == 1: row_fills.append("rgba(192,192,192,0.10)")
+        elif i == 2: row_fills.append("rgba(205,127,50,0.10)")
+        else:        row_fills.append("rgba(8,11,18,0.88)")
+
+    ranks = [f"#{i}" for i in df.index]
+    fig = go.Figure(go.Table(
+        header=dict(
+            values=["<b>Rank</b>"] + [f"<b>{c}</b>" for c in df.columns],
+            fill_color="rgba(14,20,45,0.95)",
+            font=dict(color="#e2e8f0", size=11, family="monospace"),
+            align="center", height=34,
+            line=dict(color="rgba(56,189,248,0.18)", width=1),
+        ),
+        cells=dict(
+            values=[ranks] + [df[c].tolist() for c in df.columns],
+            fill_color=[row_fills] * (len(df.columns) + 1),
+            font=dict(color="#e2e8f0", size=11, family="monospace"),
+            align=["center", "left", "center", "center", "center", "center", "center"],
+            height=28,
+            line=dict(color="rgba(255,255,255,0.04)", width=1),
+        ),
+    ))
+    fig.update_layout(
+        paper_bgcolor="#080b12",
+        title=dict(
+            text="ESTADÍSTICAS DESCRIPTIVAS POR ESTRATEGIA (ordenadas por media)",
+            font=dict(size=12, color="#e2e8f0", family="monospace"),
+            x=0,
+        ),
+        margin=dict(l=8, r=8, t=52, b=8),
+        height=max(260, n * 32 + 110),
+    )
+    return fig
+
+
+def fig_scores_distribution(per_game: dict, selected: list) -> go.Figure:
+    """Box plot de distribución de scores por partida para cada estrategia."""
+    # Ordenar por mediana descendente
+    order = sorted(selected, key=lambda n: np.median(per_game.get(n, [0])), reverse=True)
+    colors = [
+        "#fbbf24","#38bdf8","#34d399","#f87171","#a78bfa",
+        "#2dd4bf","#f97316","#e879f9","#86efac","#fde68a",
+        "#7dd3fc","#f9a8d4","#c4b5fd","#6ee7b7","#fed7aa",
+    ]
+    fig = go.Figure()
+    for i, name in enumerate(order):
+        vals = per_game.get(name, [])
+        if not vals:
+            continue
+        fig.add_trace(go.Box(
+            y=vals,
+            name=name,
+            marker_color=colors[i % len(colors)],
+            line=dict(color=colors[i % len(colors)]),
+            fillcolor=colors[i % len(colors)].replace("#", "rgba(").replace(
+                "#", "") + "30" if False else
+                f"rgba({int(colors[i%len(colors)][1:3],16)},"
+                f"{int(colors[i%len(colors)][3:5],16)},"
+                f"{int(colors[i%len(colors)][5:7],16)},0.18)",
+            boxpoints="outliers",
+            hovertemplate=f"<b>{name}</b><br>Score: %{{y:.3f}}<extra></extra>",
+        ))
+    fig.update_layout(
+        paper_bgcolor="#080b12", plot_bgcolor="#0e1420",
+        font=dict(family="monospace", color="#e2e8f0", size=10),
+        height=440,
+        title=dict(
+            text="DISTRIBUCIÓN DE SCORES POR PARTIDA — BOX PLOT",
+            font=dict(size=12), x=0,
+        ),
+        xaxis=dict(tickangle=-28, gridcolor="rgba(255,255,255,0.04)",
+                   tickfont=dict(size=9)),
+        yaxis=dict(title="Score por partida (normalizado)",
+                   gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=9)),
+        margin=dict(l=12, r=12, t=52, b=80),
+        showlegend=False,
+    )
+    return fig
+
+
+def tab_statistics():
+    """Tab 7: Análisis estadístico ANOVA del torneo."""
+    if "anova" not in st.session_state or st.session_state.anova is None:
+        st.info(
+            "👈 Ejecuta el torneo primero (Tab 🏆 Ranking) — "
+            "el análisis ANOVA se calculará automáticamente."
+        )
+        return
+
+    anova = st.session_state.anova
+
+    if "error" in anova:
+        st.error(f"⚠ {anova['error']}")
+        return
+
+    # Banner de resultado
+    sig   = anova["sig"]
+    bc    = "#34d399" if sig else "#fbbf24"
+    st.markdown(f"""
+    <div style="background:rgba(14,20,45,0.7);border:1px solid rgba(56,189,248,0.18);
+                border-radius:6px;padding:14px 20px;margin-bottom:16px;">
+      <p style="font-family:monospace;font-size:10px;letter-spacing:.12em;
+                color:#64748b;text-transform:uppercase;margin:0 0 4px 0;">
+        Análisis ANOVA de una vía
+      </p>
+      <p style="font-family:monospace;font-size:13px;color:#e2e8f0;margin:0 0 4px 0;">
+        F&thinsp;=&thinsp;<b>{anova['F']:.4f}</b>
+        &emsp;p&thinsp;=&thinsp;<b>{anova['p']:.2e}</b>
+        &emsp;<span style="color:{bc};">
+        {'Significativo ✅' if sig else 'No significativo ⚠️'}</span>
+      </p>
+      <p style="font-family:monospace;font-size:11px;color:#64748b;margin:0;">
+        {anova['interp']}
+      </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Métricas rápidas
+    mc1, mc2, mc3 = st.columns(3)
+    mc1.metric("Estrategias comparadas", anova["n_strategies"])
+    mc2.metric("Partidas totales",       anova["n_games_total"])
+    mc3.metric("F estadístico",          f"{anova['F']:.4f}")
+
+    st.markdown("---")
+
+    # Tabla ANOVA
+    st.plotly_chart(fig_anova_table(anova), use_container_width=True)
+
+    st.markdown("---")
+
+    # Box plot distribución
+    per_game = st.session_state.get("per_game", {})
+    selected = list(anova["desc_df"]["Estrategia"].tolist())
+    if per_game:
+        st.plotly_chart(
+            fig_scores_distribution(per_game, selected),
+            use_container_width=True,
+        )
+
+    st.markdown("---")
+
+    # Tabla descriptiva
+    st.plotly_chart(fig_desc_table(anova), use_container_width=True)
+
+    # Expander metodología
+    with st.expander("ℹ️ Sobre el análisis ANOVA", expanded=False):
+        st.markdown("""
+        **¿Qué mide el ANOVA aquí?**
+        Compara los scores promedio *por partida* (no el score total del torneo) entre todas las
+        estrategias seleccionadas.
+
+        **H₀ (hipótesis nula):** todas las estrategias obtienen el mismo score medio por partida.
+
+        **H₁ (hipótesis alternativa):** al menos una estrategia difiere significativamente.
+
+        **Interpretación del p-valor:**
+        - p < 0.05 → diferencias estadísticamente significativas al 95 % de confianza.
+        - p ≥ 0.05 → las diferencias podrían deberse al azar dado el número de partidas.
+
+        > **Nota:** el ANOVA asume normalidad e igualdad de varianzas. Con torneos pequeños
+        (pocas partidas), el test puede tener poca potencia. Aumenta el número de juegos por par
+        en el sidebar para resultados más robustos.
+        """)
+
+
 # ─────────────────────────────────────────────
 # Dashboard Streamlit — main()
 # ─────────────────────────────────────────────
@@ -1656,8 +2015,9 @@ def main():
         run_btn = st.button("▶ Ejecutar Torneo", type="primary", use_container_width=True)
 
     # ── Session state ─────────────────────────────────────────────
-    if "results" not in st.session_state:
-        st.session_state.results = None
+    if "results"  not in st.session_state: st.session_state.results  = None
+    if "anova"    not in st.session_state: st.session_state.anova    = None
+    if "per_game" not in st.session_state: st.session_state.per_game = {}
 
     if run_btn:
         if not valid_payoff:
@@ -1666,9 +2026,10 @@ def main():
             st.error("Selecciona al menos 2 estrategias.")
         else:
             with st.spinner("Ejecutando torneo..."):
-                payoff_matrix, ranking, h2h_data = run_tournament(
+                payoff_matrix, ranking, h2h_data, per_game = run_tournament_with_anova(
                     selected, T, R, P, S, w, n_games, n_rounds
                 )
+                anova_result = compute_anova(per_game)
             st.session_state.results = {
                 "payoff_matrix": payoff_matrix,
                 "ranking":       ranking,
@@ -1676,16 +2037,19 @@ def main():
                 "selected":      selected,
                 "params":        dict(T=T, R=R, P=P, S=S, w=w),
             }
+            st.session_state.anova    = anova_result
+            st.session_state.per_game = per_game
             st.success("✅ Torneo completado.")
 
     # ── Tabs ──────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "🏆 Ranking",
         "🌡️ Heatmap",
         "⚔️ Head-to-Head",
         "📊 Distribución",
         "ℹ️ Estrategias",
         "⚡ Crisis Energética Rusia–UE",
+        "🧪 Análisis Estadístico",
     ])
 
     # ── Tab 1: Ranking ────────────────────────────────────────────
@@ -1864,6 +2228,10 @@ def main():
     # ── Tab 6: Crisis Energética Rusia–UE ────────────────────────
     with tab6:
         render_energy_crisis_tab()
+
+    # ── Tab 7: Análisis Estadístico ANOVA ────────────────────────
+    with tab7:
+        tab_statistics()
 
 
 if __name__ == "__main__":
