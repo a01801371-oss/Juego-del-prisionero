@@ -2376,6 +2376,140 @@ def tab_statistics():
         """)
 
 
+
+def tab_rng_tests():
+    """
+    Anexo Técnico: Tests de Calidad del RNG (PCG64, seed=42).
+    Requisitos del PDF: KS test uniformidad, lag plot autocorrelación,
+    histograma de 10^4 muestras.
+    """
+    st.markdown("### 🎲 Anexo Técnico — Tests de Calidad RNG")
+    st.markdown("""
+    <div style="background:rgba(14,20,45,0.8);border:1px solid rgba(56,189,248,0.18);
+                border-radius:6px;padding:12px 18px;margin-bottom:14px;">
+      <p style="font-size:11px;color:#94a3b8;margin:0;">
+        <b style="color:#e2e8f0;">Generador:</b> numpy.random.Generator(PCG64(seed=42))
+        &nbsp;·&nbsp;
+        <b style="color:#e2e8f0;">Implementación:</b> np.random.default_rng(np.random.PCG64(42))
+        &nbsp;·&nbsp;
+        <b style="color:#e2e8f0;">Muestras:</b> 10,000
+      </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Generate test samples
+    _rng_test = np.random.default_rng(np.random.PCG64(42))
+    N = 10_000
+    samples = _rng_test.uniform(0, 1, N)
+
+    # ── Test 1: Kolmogorov-Smirnov ───────────────────────────
+    st.markdown("#### Test 1 — Kolmogorov-Smirnov (uniformidad)")
+    from scipy import stats as _st
+    ks_stat, ks_p = _st.kstest(samples, 'uniform')
+    sig_color = "#34d399" if ks_p > 0.05 else "#f87171"
+    result_text = "✅ No se rechaza H₀ — distribución uniforme confirmada"                   if ks_p > 0.05 else "❌ Se rechaza H₀ — posible sesgo"
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Estadístico KS", f"{ks_stat:.6f}")
+    col2.metric("p-valor", f"{ks_p:.4f}")
+    col3.metric("Resultado (α=0.05)", "PASA ✅" if ks_p > 0.05 else "FALLA ❌")
+
+    st.markdown(f"""
+    <p style="font-size:11px;color:{sig_color};margin:4px 0 12px 0;">
+    {result_text} &nbsp;·&nbsp; p-valor = {ks_p:.4f} {'>' if ks_p > 0.05 else '<'} 0.05
+    </p>
+    """, unsafe_allow_html=True)
+
+    # ── Test 2: Histograma 10^4 muestras ─────────────────────
+    st.markdown("#### Test 2 — Histograma de 10,000 muestras")
+    fig_hist = go.Figure()
+    fig_hist.add_trace(go.Histogram(
+        x=samples, nbinsx=50,
+        name="Frecuencia observada",
+        marker_color="rgba(56,189,248,0.7)",
+        marker_line=dict(color="rgba(56,189,248,0.3)", width=0.5),
+        hovertemplate="Bin: %{x:.2f}<br>Count: %{y}<extra></extra>",
+    ))
+    expected = N / 50
+    fig_hist.add_hline(y=expected, line_dash="dot",
+                       line_color="rgba(251,191,36,0.7)", line_width=1.5,
+                       annotation_text=f"Esperado = {expected:.0f}",
+                       annotation_font=dict(size=9, color="#fbbf24"))
+    fig_hist.update_layout(
+        paper_bgcolor="#080b12", plot_bgcolor="#0e1420",
+        font=dict(family="monospace", color="#e2e8f0", size=10),
+        height=300,
+        title=dict(text="HISTOGRAMA — 10,000 muestras U(0,1) con PCG64(seed=42)",
+                   font=dict(size=11), x=0),
+        xaxis=dict(title="Valor", gridcolor="rgba(255,255,255,0.04)"),
+        yaxis=dict(title="Frecuencia", gridcolor="rgba(255,255,255,0.04)"),
+        margin=dict(l=12, r=12, t=48, b=12),
+        showlegend=False,
+    )
+    st.plotly_chart(fig_hist, use_container_width=True)
+
+    # ── Test 3: Lag plot (autocorrelación) ───────────────────
+    st.markdown("#### Test 3 — Lag Plot (autocorrelación)")
+    st.caption("Un buen RNG no debe mostrar estructura en el lag plot — los puntos deben distribuirse aleatoriamente.")
+    lag_sample = samples[:500]
+    fig_lag = go.Figure()
+    fig_lag.add_trace(go.Scatter(
+        x=lag_sample[:-1], y=lag_sample[1:],
+        mode="markers",
+        marker=dict(color="rgba(56,189,248,0.35)", size=3),
+        hovertemplate="x(t): %{x:.3f}<br>x(t+1): %{y:.3f}<extra></extra>",
+        name="Par (x_t, x_{t+1})",
+    ))
+    fig_lag.update_layout(
+        paper_bgcolor="#080b12", plot_bgcolor="#0e1420",
+        font=dict(family="monospace", color="#e2e8f0", size=10),
+        height=320,
+        title=dict(text="LAG PLOT — x(t) vs x(t+1)  ·  sin estructura = buen RNG",
+                   font=dict(size=11), x=0),
+        xaxis=dict(title="x(t)", gridcolor="rgba(255,255,255,0.04)", range=[0,1]),
+        yaxis=dict(title="x(t+1)", gridcolor="rgba(255,255,255,0.04)", range=[0,1]),
+        margin=dict(l=12, r=12, t=48, b=12),
+    )
+    st.plotly_chart(fig_lag, use_container_width=True)
+
+    # ── Correlación de lag ───────────────────────────────────
+    lag_corr = float(np.corrcoef(lag_sample[:-1], lag_sample[1:])[0,1])
+    st.metric("Correlación lag-1", f"{lag_corr:.6f}",
+              help="Debe ser cercano a 0. |r| < 0.02 indica buena independencia.")
+
+    # ── Test 4: Chi-cuadrado ─────────────────────────────────
+    st.markdown("#### Test 4 — Chi-cuadrado (frecuencias por bin)")
+    observed, _ = np.histogram(samples, bins=10)
+    chi2_stat, chi2_p = _st.chisquare(observed)
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Estadístico χ²", f"{chi2_stat:.4f}")
+    c2.metric("p-valor", f"{chi2_p:.4f}")
+    c3.metric("Resultado (α=0.05)", "PASA ✅" if chi2_p > 0.05 else "FALLA ❌")
+
+    st.markdown("---")
+    st.markdown("""
+    **Resumen metodológico:**
+    El generador PCG64 (Permuted Congruential Generator, 64-bit) de NumPy es un
+    generador de período extremadamente largo (2¹²⁸) con excelentes propiedades
+    estadísticas. La semilla fija (seed=42) garantiza reproducibilidad total —
+    cualquier persona que ejecute el código obtendrá exactamente los mismos resultados.
+    """)
+
+    # ── Exportar resultados ──────────────────────────────────
+    import io as _io
+    _buf = _io.StringIO()
+    pd.DataFrame({
+        "sample_index": range(N),
+        "value": samples,
+    }).to_csv(_buf, index=False)
+    st.download_button(
+        "⬇ Descargar muestras RNG (CSV)",
+        data=_buf.getvalue(),
+        file_name="rng_samples_pcg64_seed42.csv",
+        mime="text/csv",
+    )
+
+
 # ─────────────────────────────────────────────
 # Dashboard Streamlit — main()
 # ─────────────────────────────────────────────
@@ -2453,7 +2587,7 @@ def main():
             st.success("✅ Torneo completado.")
 
     # ── Tabs ──────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
         "🏆 Ranking",
         "🌡️ Heatmap",
         "⚔️ Head-to-Head",
@@ -2461,6 +2595,7 @@ def main():
         "ℹ️ Estrategias",
         "🧪 Análisis Estadístico",
         "⚡ Crisis Energética Rusia–UE",
+        "🔬 Anexo: Tests RNG",
     ])
 
     # ── Tab 1: Ranking ────────────────────────────────────────────
@@ -2487,6 +2622,16 @@ def main():
             disp = ranking.copy()
             disp.index = disp.index.map(lambda x: f"#{x}")
             st.dataframe(disp, use_container_width=True)
+
+            import io as _io_r
+            _buf_r = _io_r.StringIO()
+            ranking.to_csv(_buf_r, index=True)
+            st.download_button(
+                "⬇ Descargar ranking (CSV)",
+                data=_buf_r.getvalue(),
+                file_name="ranking_torneo.csv",
+                mime="text/csv",
+            )
 
     # ── Tab 2: Heatmap ────────────────────────────────────────────
     with tab2:
@@ -2643,6 +2788,10 @@ def main():
     # ── Tab 7: Crisis Energética Rusia–UE ────────────────────────
     with tab7:
         render_energy_crisis_tab()
+
+    # ── Tab 8: Anexo Tests RNG ────────────────────────────────
+    with tab8:
+        tab_rng_tests()
 
 
 if __name__ == "__main__":
