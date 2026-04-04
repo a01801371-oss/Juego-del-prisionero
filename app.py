@@ -2459,8 +2459,8 @@ def main():
         "⚔️ Head-to-Head",
         "📊 Distribución",
         "ℹ️ Estrategias",
-        "⚡ Crisis Energética Rusia–UE",
         "🧪 Análisis Estadístico",
+        "⚡ Crisis Energética Rusia–UE",
     ])
 
     # ── Tab 1: Ranking ────────────────────────────────────────────
@@ -2636,13 +2636,13 @@ def main():
                 with st.expander(f"**{name}**"):
                     st.write(desc)
 
-    # ── Tab 6: Crisis Energética Rusia–UE ────────────────────────
+    # ── Tab 6: Análisis Estadístico ANOVA ────────────────────────
     with tab6:
-        render_energy_crisis_tab()
-
-    # ── Tab 7: Análisis Estadístico ANOVA ────────────────────────
-    with tab7:
         tab_statistics()
+
+    # ── Tab 7: Crisis Energética Rusia–UE ────────────────────────
+    with tab7:
+        render_energy_crisis_tab()
 
 
 if __name__ == "__main__":
