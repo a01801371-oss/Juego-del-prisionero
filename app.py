@@ -1131,74 +1131,44 @@ def fig_welfare_accumulation(df: pd.DataFrame) -> go.Figure:
 
 def fig_economic_impact(df: pd.DataFrame, T: float) -> go.Figure:
     """
-    PIB (30d rolling) e inflación UE con volatilidad 7d.
-    Cuando hay DD → la banda de inflación se ensancha (efecto estocástico visible).
+    Solo PIB — UE y Rusia (media móvil 30d).
+    La inflación se muestra en fig_inflation_comparison por separado.
+    Fuentes: Eurostat namq_10_gdp (UE) · Banco Mundial NY.GDP.MKTP.KD.ZG (Rusia).
     """
-    fig = make_subplots(
-        rows=2, cols=1, shared_xaxes=True,
-        row_heights=[0.55, 0.45], vertical_spacing=0.06,
-        subplot_titles=["PIB (media móvil 30d, %)", "INFLACIÓN UE + VOLATILIDAD (30d / 7d)"],
-    )
-    # PIB
+    fig = go.Figure()
+
     fig.add_trace(go.Scatter(
         x=df["Date"], y=df["gdp_eu_30d"],
-        name="PIB UE (30d)", mode="lines",
-        line=dict(color=_EU, width=1.8),
+        name="PIB UE — Eurostat (30d)", mode="lines",
+        line=dict(color=_EU, width=2.2),
         hovertemplate="PIB UE: %{y:.2f}%<extra></extra>",
-    ), row=1, col=1)
+    ))
     fig.add_trace(go.Scatter(
         x=df["Date"], y=df["gdp_ru_30d"],
-        name="PIB Rusia (30d)", mode="lines",
-        line=dict(color=_RU, width=1.8),
-        hovertemplate="PIB Ru: %{y:.2f}%<extra></extra>",
-    ), row=1, col=1)
+        name="PIB Rusia — Banco Mundial (30d)", mode="lines",
+        line=dict(color=_RU, width=2.2),
+        hovertemplate="PIB Rusia: %{y:.2f}%<extra></extra>",
+    ))
     fig.add_hline(y=0, line_dash="dot",
-                  line_color="rgba(255,255,255,0.15)", row=1, col=1)
-
-    # Inflación con banda de volatilidad (DD)
-    inf_upper = df["inf_eu_30d"] + df["inf_eu_7d"].fillna(0)
-    inf_lower = (df["inf_eu_30d"] - df["inf_eu_7d"].fillna(0)).clip(lower=0)
-
-    fig.add_trace(go.Scatter(
-        x=pd.concat([df["Date"], df["Date"].iloc[::-1]]),
-        y=pd.concat([inf_upper, inf_lower.iloc[::-1]]),
-        fill="toself",
-        fillcolor="rgba(251,191,36,0.12)",
-        line=dict(color="rgba(0,0,0,0)"),
-        name="Banda volatilidad DD",
-        showlegend=True,
-        hoverinfo="skip",
-    ), row=2, col=1)
-    fig.add_trace(go.Scatter(
-        x=df["Date"], y=df["inf_eu_30d"],
-        name="Inflación UE (30d)", mode="lines",
-        line=dict(color=_GAS, width=1.8),
-        hovertemplate="Inflación: %{y:.2f}%<extra></extra>",
-    ), row=2, col=1)
-    fig.add_hline(y=2.0, line_dash="dot",
-                  line_color="rgba(52,211,153,0.4)", row=2, col=1,
-                  annotation_text="BCE 2%",
-                  annotation_font=dict(size=8, color=_GRN),
-                  annotation_position="top right")
+                  line_color="rgba(255,255,255,0.18)", line_width=1.2)
 
     # Sombrear períodos DD
-    dd_periods = _get_dd_periods(df)
-    for ds, de in dd_periods:
-        for r in [1, 2]:
-            fig.add_vrect(
-                x0=ds, x1=de,
-                fillcolor="rgba(167,139,250,0.08)",
-                line_width=0, row=r, col=1,
-            )
+    for ds, de in _get_dd_periods(df):
+        fig.add_vrect(x0=ds, x1=de,
+                      fillcolor="rgba(167,139,250,0.07)", line_width=0)
 
-    _add_event_lines(fig, df, row=1)
+    _add_event_lines(fig, df)
     fig.update_layout(
-        **_LAYOUT, height=440,
-        title_text=f"IMPACTO ECONÓMICO — DATOS REALES (Eurostat/BM) + AJUSTE DP · T={T}",
+        **_LAYOUT, height=320,
+        title_text=(
+            f"PIB UE vs RUSIA — Crecimiento interanual % (media móvil 30d)  ·  "
+            f"Fuentes: Eurostat · Banco Mundial  ·  T={T}"
+        ),
         title_font=dict(size=11),
+        yaxis=dict(gridcolor=_GRD, tickfont=dict(size=9),
+                   title="Crecimiento YoY (%)", ticksuffix="%"),
+        xaxis=dict(gridcolor=_GRD, tickfont=dict(size=9)),
     )
-    fig.update_xaxes(gridcolor=_GRD, tickfont=dict(size=9))
-    fig.update_yaxes(gridcolor=_GRD, tickfont=dict(size=9))
     return fig
 
 
@@ -1372,96 +1342,82 @@ def fig_axelrod_comparison(df_hist: pd.DataFrame, df_sim: pd.DataFrame,
 
 def fig_inflation_comparison(df: pd.DataFrame) -> go.Figure:
     """
-    Gráfico comparativo de inflación: UE vs Rusia (ambas con banda de volatilidad).
-    Muestra claramente la diferencia estructural entre ambas economías.
-    Fuentes: Eurostat HICP prc_hicp_minr (UE) | Banco Mundial FP.CPI.TOTL.ZG (Rusia).
+    Inflación YoY% directa (sin rolling, sin ajuste DP).
+    UE: Eurostat HICP prc_hicp_minr — interpolado mensual → diario
+    Rusia: Banco Mundial FP.CPI.TOTL.ZG — interpolado anual → diario
+    2025-2026: proyecciones FMI WEO / CBR.
     """
+    # Cargar los puntos de anclaje reales (mismos que load_macro_data)
+    macro = load_macro_data()
+
     fig = go.Figure()
 
-    # ── Banda volatilidad UE ──────────────────────────────────
-    inf_eu_upper = df["inf_eu_30d"] + df["inf_eu_7d"].fillna(0)
-    inf_eu_lower = (df["inf_eu_30d"] - df["inf_eu_7d"].fillna(0)).clip(lower=0)
+    # ── Inflación UE — datos directos del CSV macro ───────────
     fig.add_trace(go.Scatter(
-        x=pd.concat([df["Date"], df["Date"].iloc[::-1]]),
-        y=pd.concat([inf_eu_upper, inf_eu_lower.iloc[::-1]]),
-        fill="toself", fillcolor="rgba(56,189,248,0.10)",
-        line=dict(color="rgba(0,0,0,0)"),
-        showlegend=False, hoverinfo="skip", name="Banda UE",
-    ))
-
-    # ── Banda volatilidad Rusia ───────────────────────────────
-    inf_ru_upper = df["inf_ru_30d"] + df["inf_ru_7d"].fillna(0)
-    inf_ru_lower = (df["inf_ru_30d"] - df["inf_ru_7d"].fillna(0)).clip(lower=0)
-    fig.add_trace(go.Scatter(
-        x=pd.concat([df["Date"], df["Date"].iloc[::-1]]),
-        y=pd.concat([inf_ru_upper, inf_ru_lower.iloc[::-1]]),
-        fill="toself", fillcolor="rgba(248,113,113,0.10)",
-        line=dict(color="rgba(0,0,0,0)"),
-        showlegend=False, hoverinfo="skip", name="Banda Rusia",
-    ))
-
-    # ── Curvas principales ────────────────────────────────────
-    fig.add_trace(go.Scatter(
-        x=df["Date"], y=df["inf_eu_30d"],
+        x=macro["Date"], y=macro["INFL_EU"],
         name="Inflación UE (Eurostat HICP)", mode="lines",
         line=dict(color=_EU, width=2.2),
-        hovertemplate="UE: %{y:.1f}%<extra></extra>",
+        hovertemplate="%{x|%b %Y}<br>UE: <b>%{y:.1f}%</b><extra></extra>",
     ))
+
+    # ── Inflación Rusia — datos directos del CSV macro ────────
     fig.add_trace(go.Scatter(
-        x=df["Date"], y=df["inf_ru_30d"],
+        x=macro["Date"], y=macro["INFL_RU"],
         name="Inflación Rusia (Banco Mundial)", mode="lines",
         line=dict(color=_RU, width=2.2),
-        hovertemplate="Rusia: %{y:.1f}%<extra></extra>",
+        hovertemplate="%{x|%b %Y}<br>Rusia: <b>%{y:.1f}%</b><extra></extra>",
     ))
 
-    # ── Línea objetivo BCE ────────────────────────────────────
-    fig.add_hline(
-        y=2.0, line_dash="dot",
-        line_color="rgba(52,211,153,0.5)", line_width=1.5,
-        annotation_text="Objetivo BCE 2%",
-        annotation_font=dict(size=8, color=_GRN),
-        annotation_position="bottom right",
-    )
+    # ── Objetivo BCE ──────────────────────────────────────────
+    fig.add_hline(y=2.0, line_dash="dot",
+                  line_color="rgba(52,211,153,0.5)", line_width=1.5,
+                  annotation_text="Objetivo BCE 2%",
+                  annotation_font=dict(size=8, color=_GRN),
+                  annotation_position="bottom right")
 
-    # ── Anotación pico UE ─────────────────────────────────────
-    peak_idx = df["inf_eu_30d"].idxmax()
-    peak_row = df.loc[peak_idx]
+    # ── Anotación pico UE ────────────────────────────────────
+    peak_eu_idx = macro["INFL_EU"].idxmax()
+    peak_eu = macro.loc[peak_eu_idx]
     fig.add_annotation(
-        x=peak_row["Date"],
-        y=float(peak_row["inf_eu_30d"]),
-        text=f"Pico UE: {peak_row['inf_eu_30d']:.1f}%",
-        showarrow=True, arrowhead=2,
+        x=peak_eu["Date"], y=float(peak_eu["INFL_EU"]),
+        text=f"Pico UE: {peak_eu['INFL_EU']:.1f}% (oct 2022)",
+        showarrow=True, arrowhead=2, ay=-32,
         font=dict(size=8, color=_EU),
-        arrowcolor=_EU, bgcolor="rgba(0,0,0,0.6)",
-        ay=-30,
+        arrowcolor=_EU, bgcolor="rgba(0,0,0,0.65)",
     )
 
-    # ── Anotación pico Rusia ──────────────────────────────────
-    peak_ru_idx = df["inf_ru_30d"].idxmax()
-    peak_ru_row = df.loc[peak_ru_idx]
+    # ── Anotación pico Rusia ─────────────────────────────────
+    peak_ru_idx = macro["INFL_RU"].idxmax()
+    peak_ru = macro.loc[peak_ru_idx]
     fig.add_annotation(
-        x=peak_ru_row["Date"],
-        y=float(peak_ru_row["inf_ru_30d"]),
-        text=f"Pico Rusia: {peak_ru_row['inf_ru_30d']:.1f}%",
-        showarrow=True, arrowhead=2,
+        x=peak_ru["Date"], y=float(peak_ru["INFL_RU"]),
+        text=f"Pico Rusia: {peak_ru['INFL_RU']:.1f}% (2022)",
+        showarrow=True, arrowhead=2, ay=-32,
         font=dict(size=8, color=_RU),
-        arrowcolor=_RU, bgcolor="rgba(0,0,0,0.6)",
-        ay=-35,
+        arrowcolor=_RU, bgcolor="rgba(0,0,0,0.65)",
     )
 
-    _add_event_lines(fig, df)
+    # ── Sombrear zona de convergencia ────────────────────────
+    fig.add_vrect(
+        x0=pd.Timestamp("2022-08-01"), x1=pd.Timestamp("2023-02-01"),
+        fillcolor="rgba(167,139,250,0.07)", line_width=0,
+        annotation_text="Convergencia", annotation_position="top left",
+        annotation_font=dict(size=7, color="rgba(167,139,250,0.6)"),
+    )
+
+    _add_event_lines(fig, macro)
 
     fig.update_layout(
         **_LAYOUT, height=360,
         title_text=(
-            "INFLACIÓN UE vs RUSIA — Tasas anuales YoY % (media móvil 30d)  ·  "
-            "Fuentes: Eurostat HICP · Banco Mundial"
+            "INFLACIÓN UE vs RUSIA — Tasa anual YoY %  ·  "
+            "Fuentes: Eurostat HICP prc_hicp_minr · Banco Mundial FP.CPI.TOTL.ZG"
         ),
         title_font=dict(size=11),
         yaxis=dict(
             gridcolor=_GRD, tickfont=dict(size=9),
-            title="Inflación YoY (%)",
-            ticksuffix="%",
+            title="Inflación YoY (%)", ticksuffix="%",
+            rangemode="tozero",
         ),
         xaxis=dict(gridcolor=_GRD, tickfont=dict(size=9)),
     )
