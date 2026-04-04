@@ -872,18 +872,19 @@ def simulate_ipd(
             _gdp_eu_r  = float(_mr.get("GDP_EU",  gdp_eu_b))
             _gdp_ru_r  = float(_mr.get("GDP_RU",  gdp_ru_b))
             _infl_eu_r = float(_mr.get("INFL_EU", inf_eu_b))
+            _infl_ru_r = float(_mr.get("INFL_RU", 7.0))
             if key == ("D","D"):
-                # Solo ruido pequeño para hacer visible la banda de volatilidad
                 _n1 = float(_rng_noise.normal(0, 0.25))
                 _n2 = float(abs(_rng_noise.normal(0, 0.5)))
                 gdp_eu = _gdp_eu_r + _n1
                 gdp_ru = _gdp_ru_r + _n1 * 0.5
                 inf_eu = _infl_eu_r + _n2
+                inf_ru = _infl_ru_r + abs(_n2) * 0.5
             else:
-                # Datos reales directos sin ajuste
                 gdp_eu = _gdp_eu_r + float(_rng_noise.normal(0, 0.08))
                 gdp_ru = _gdp_ru_r + float(_rng_noise.normal(0, 0.08))
                 inf_eu = _infl_eu_r
+                inf_ru = _infl_ru_r
         else:
             if key == ("D","D"):
                 _noise_gdp = float(_rng_noise.normal(0, 1.2))
@@ -891,11 +892,13 @@ def simulate_ipd(
                 gdp_ru  = gdp_ru_b + _noise_gdp
                 gdp_eu  = gdp_eu_b - abs(_noise_gdp) * 0.8
                 inf_eu  = inf_eu_b + _noise_inf
+                inf_ru  = 7.0 + _noise_inf * 0.8
             else:
                 _noise  = float(_rng_noise.normal(0, 0.3))
                 gdp_ru  = gdp_ru_b + _noise
                 gdp_eu  = gdp_eu_b + _noise * 0.5
                 inf_eu  = inf_eu_b + abs(_noise) * 0.4
+                inf_ru  = 7.0 + abs(_noise) * 0.3
 
         cum_ru += pr; cum_eu += pe
         label = _outcome_labels.get(key, "Cooperación Mutua")
@@ -906,6 +909,7 @@ def simulate_ipd(
             "gdp_ru":    round(gdp_ru, 3),
             "gdp_eu":    round(gdp_eu, 3),
             "inf_eu":    round(inf_eu, 3),
+            "inf_ru":    round(inf_ru, 3),
             "outcome":   label,
             "color":     _outcome_colors.get(label, "#64748b"),
         })
@@ -919,7 +923,9 @@ def simulate_ipd(
     result["gdp_eu_30d"]  = result["gdp_eu"].rolling(30, min_periods=1).mean()
     result["gdp_ru_30d"]  = result["gdp_ru"].rolling(30, min_periods=1).mean()
     result["inf_eu_30d"]  = result["inf_eu"].rolling(30, min_periods=1).mean()
-    result["inf_eu_7d"]   = result["inf_eu"].rolling(7,  min_periods=1).std()  # volatilidad
+    result["inf_eu_7d"]   = result["inf_eu"].rolling(7,  min_periods=1).std()
+    result["inf_ru_30d"]  = result["inf_ru"].rolling(30, min_periods=1).mean()
+    result["inf_ru_7d"]   = result["inf_ru"].rolling(7,  min_periods=1).std()
     result["coop_30d"]    = (
         ((result["move_russia"]=="C") & (result["move_eu"]=="C"))
         .rolling(30, min_periods=1).mean() * 100
@@ -1363,6 +1369,105 @@ def fig_axelrod_comparison(df_hist: pd.DataFrame, df_sim: pd.DataFrame,
 #  TAB PRINCIPAL — render_energy_crisis_tab()
 # ══════════════════════════════════════════════════════════════════════════
 
+
+def fig_inflation_comparison(df: pd.DataFrame) -> go.Figure:
+    """
+    Gráfico comparativo de inflación: UE vs Rusia (ambas con banda de volatilidad).
+    Muestra claramente la diferencia estructural entre ambas economías.
+    Fuentes: Eurostat HICP prc_hicp_minr (UE) | Banco Mundial FP.CPI.TOTL.ZG (Rusia).
+    """
+    fig = go.Figure()
+
+    # ── Banda volatilidad UE ──────────────────────────────────
+    inf_eu_upper = df["inf_eu_30d"] + df["inf_eu_7d"].fillna(0)
+    inf_eu_lower = (df["inf_eu_30d"] - df["inf_eu_7d"].fillna(0)).clip(lower=0)
+    fig.add_trace(go.Scatter(
+        x=pd.concat([df["Date"], df["Date"].iloc[::-1]]),
+        y=pd.concat([inf_eu_upper, inf_eu_lower.iloc[::-1]]),
+        fill="toself", fillcolor="rgba(56,189,248,0.10)",
+        line=dict(color="rgba(0,0,0,0)"),
+        showlegend=False, hoverinfo="skip", name="Banda UE",
+    ))
+
+    # ── Banda volatilidad Rusia ───────────────────────────────
+    inf_ru_upper = df["inf_ru_30d"] + df["inf_ru_7d"].fillna(0)
+    inf_ru_lower = (df["inf_ru_30d"] - df["inf_ru_7d"].fillna(0)).clip(lower=0)
+    fig.add_trace(go.Scatter(
+        x=pd.concat([df["Date"], df["Date"].iloc[::-1]]),
+        y=pd.concat([inf_ru_upper, inf_ru_lower.iloc[::-1]]),
+        fill="toself", fillcolor="rgba(248,113,113,0.10)",
+        line=dict(color="rgba(0,0,0,0)"),
+        showlegend=False, hoverinfo="skip", name="Banda Rusia",
+    ))
+
+    # ── Curvas principales ────────────────────────────────────
+    fig.add_trace(go.Scatter(
+        x=df["Date"], y=df["inf_eu_30d"],
+        name="Inflación UE (Eurostat HICP)", mode="lines",
+        line=dict(color=_EU, width=2.2),
+        hovertemplate="UE: %{y:.1f}%<extra></extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=df["Date"], y=df["inf_ru_30d"],
+        name="Inflación Rusia (Banco Mundial)", mode="lines",
+        line=dict(color=_RU, width=2.2),
+        hovertemplate="Rusia: %{y:.1f}%<extra></extra>",
+    ))
+
+    # ── Línea objetivo BCE ────────────────────────────────────
+    fig.add_hline(
+        y=2.0, line_dash="dot",
+        line_color="rgba(52,211,153,0.5)", line_width=1.5,
+        annotation_text="Objetivo BCE 2%",
+        annotation_font=dict(size=8, color=_GRN),
+        annotation_position="bottom right",
+    )
+
+    # ── Anotación pico UE ─────────────────────────────────────
+    peak_idx = df["inf_eu_30d"].idxmax()
+    peak_row = df.loc[peak_idx]
+    fig.add_annotation(
+        x=peak_row["Date"],
+        y=float(peak_row["inf_eu_30d"]),
+        text=f"Pico UE: {peak_row['inf_eu_30d']:.1f}%",
+        showarrow=True, arrowhead=2,
+        font=dict(size=8, color=_EU),
+        arrowcolor=_EU, bgcolor="rgba(0,0,0,0.6)",
+        ay=-30,
+    )
+
+    # ── Anotación pico Rusia ──────────────────────────────────
+    peak_ru_idx = df["inf_ru_30d"].idxmax()
+    peak_ru_row = df.loc[peak_ru_idx]
+    fig.add_annotation(
+        x=peak_ru_row["Date"],
+        y=float(peak_ru_row["inf_ru_30d"]),
+        text=f"Pico Rusia: {peak_ru_row['inf_ru_30d']:.1f}%",
+        showarrow=True, arrowhead=2,
+        font=dict(size=8, color=_RU),
+        arrowcolor=_RU, bgcolor="rgba(0,0,0,0.6)",
+        ay=-35,
+    )
+
+    _add_event_lines(fig, df)
+
+    fig.update_layout(
+        **_LAYOUT, height=360,
+        title_text=(
+            "INFLACIÓN UE vs RUSIA — Tasas anuales YoY % (media móvil 30d)  ·  "
+            "Fuentes: Eurostat HICP · Banco Mundial"
+        ),
+        title_font=dict(size=11),
+        yaxis=dict(
+            gridcolor=_GRD, tickfont=dict(size=9),
+            title="Inflación YoY (%)",
+            ticksuffix="%",
+        ),
+        xaxis=dict(gridcolor=_GRD, tickfont=dict(size=9)),
+    )
+    return fig
+
+
 def render_energy_crisis_tab():
     """
     Dashboard interactivo de Teoría de Juegos Geopolítica.
@@ -1591,6 +1696,9 @@ def render_energy_crisis_tab():
     # Impacto económico (con volatilidad DD)
     st.plotly_chart(fig_economic_impact(df_sim, ec_T), use_container_width=True)
 
+    # Inflación comparada UE vs Rusia
+    st.plotly_chart(fig_inflation_comparison(df_sim), use_container_width=True)
+
     # Comparación Axelrod si hay simulación alternativa
     if ru_strategy != "Datos Históricos" or eu_strategy != "Realista/Sanciones":
         _label = f"Rusia:{ru_strategy} / UE:{eu_strategy}"
@@ -1706,7 +1814,7 @@ def render_energy_crisis_tab():
     _buf = _io.StringIO()
     _dl_cols = ["Date","Russia","LNG","move_russia","move_eu","outcome",
                 "score_ru","score_eu","cum_ru","cum_eu",
-                "gdp_eu_30d","gdp_ru_30d","inf_eu_30d","inf_eu_7d","coop_30d","dd_30d"]
+                "gdp_eu_30d","gdp_ru_30d","inf_eu_30d","inf_eu_7d","inf_ru_30d","coop_30d","dd_30d"]
     df_sim[[c for c in _dl_cols if c in df_sim.columns]].to_csv(_buf, index=False)
     st.download_button(
         "⬇ Descargar simulación (CSV)",
