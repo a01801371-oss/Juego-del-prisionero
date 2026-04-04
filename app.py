@@ -1436,8 +1436,8 @@ def fig_tft_vs_historical(df_hist: pd.DataFrame, df_tft: pd.DataFrame) -> go.Fig
         subplot_titles=[
             "BIENESTAR ACUMULADO — Rusia",
             "BIENESTAR ACUMULADO — UE",
-            "PIB UE (30d) — Histórico vs TFT",
-            "% Cooperación Mutua (30d)",
+            "Δ BIENESTAR (TFT − Histórico)  ·  rojo=Rusia pierde · azul=UE gana",
+            "% COOPERACIÓN MUTUA (30d)  ·  rojo=Histórico · verde=TFT",
         ],
         vertical_spacing=0.12,
         horizontal_spacing=0.08,
@@ -1465,43 +1465,52 @@ def fig_tft_vs_historical(df_hist: pd.DataFrame, df_tft: pd.DataFrame) -> go.Fig
             legendgroup="tft", showlegend=(ci==1),
         ), row=1, col=ci)
 
-    # ── Fila 2 izq: PIB UE ──────────────────────────────────
-    macro = load_macro_data()
+    # ── Fila 2 izq: Score diario (flujo de pagos) ───────────
+    # El score diario SÍ cambia: DC da T=5 (histórico) vs CC da R=3 (TFT)
+    # Mostrar la diferencia diaria acumulada revela el trade-off
+    df_hist_copy = df_hist.copy()
+    df_tft_copy  = df_tft.copy()
+    diff_ru = df_tft_copy["cum_ru"] - df_hist_copy["cum_ru"]
+    diff_eu = df_tft_copy["cum_eu"] - df_hist_copy["cum_eu"]
+
     fig.add_trace(go.Scatter(
-        x=df_hist["Date"], y=df_hist["gdp_eu_30d"],
-        name="PIB UE — Histórico",
-        mode="lines", line=dict(color=_EU, width=2),
-        hovertemplate="PIB UE hist: %{y:.2f}%<extra></extra>",
-        legendgroup="hist", showlegend=False,
+        x=df_hist["Date"], y=diff_ru,
+        name="Δ Bienestar Rusia (TFT − Histórico)",
+        mode="lines", line=dict(color=_RU, width=2),
+        fill="tozeroy", fillcolor="rgba(248,113,113,0.08)",
+        hovertemplate="Δ Rusia: %{y:+,.0f} pts<extra></extra>",
+        legendgroup="diff", showlegend=False,
     ), row=2, col=1)
     fig.add_trace(go.Scatter(
-        x=df_tft["Date"], y=df_tft["gdp_eu_30d"],
-        name="PIB UE — Rusia TFT",
-        mode="lines", line=dict(color="#7dd3fc", width=2, dash="dash"),
-        hovertemplate="PIB UE TFT: %{y:.2f}%<extra></extra>",
-        legendgroup="tft", showlegend=False,
+        x=df_hist["Date"], y=diff_eu,
+        name="Δ Bienestar UE (TFT − Histórico)",
+        mode="lines", line=dict(color=_EU, width=2),
+        hovertemplate="Δ UE: %{y:+,.0f} pts<extra></extra>",
+        legendgroup="diff", showlegend=False,
     ), row=2, col=1)
     fig.add_hline(y=0, line_dash="dot",
-                  line_color="rgba(255,255,255,0.15)", row=2, col=1)
+                  line_color="rgba(255,255,255,0.25)", line_width=1.5,
+                  row=2, col=1)
 
-    # ── Fila 2 der: % cooperación mutua ─────────────────────
+    # ── Fila 2 der: % cooperación mutua — colores distintos ──
     fig.add_trace(go.Scatter(
         x=df_hist["Date"], y=df_hist["coop_30d"],
         name="CC% — Histórico",
-        mode="lines", line=dict(color=_GRN, width=2),
-        fill="tozeroy", fillcolor="rgba(52,211,153,0.06)",
-        hovertemplate="CC hist: %{y:.1f}%<extra></extra>",
+        mode="lines", line=dict(color=_RU, width=2),
+        fill="tozeroy", fillcolor="rgba(248,113,113,0.07)",
+        hovertemplate="CC histórico: %{y:.1f}%<extra></extra>",
         legendgroup="hist", showlegend=False,
     ), row=2, col=2)
     fig.add_trace(go.Scatter(
         x=df_tft["Date"], y=df_tft["coop_30d"],
         name="CC% — Rusia TFT",
-        mode="lines", line=dict(color="#86efac", width=2, dash="dash"),
-        hovertemplate="CC TFT: %{y:.1f}%<extra></extra>",
+        mode="lines", line=dict(color=_GRN, width=2),
+        fill="tozeroy", fillcolor="rgba(52,211,153,0.08)",
+        hovertemplate="CC con TFT: %{y:.1f}%<extra></extra>",
         legendgroup="tft", showlegend=False,
     ), row=2, col=2)
     fig.add_hline(y=50, line_dash="dot",
-                  line_color="rgba(255,255,255,0.15)", row=2, col=2)
+                  line_color="rgba(255,255,255,0.18)", row=2, col=2)
 
     fig.update_layout(
         paper_bgcolor=_BG, plot_bgcolor=_SRF,
