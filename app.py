@@ -1436,8 +1436,8 @@ def fig_tft_vs_historical(df_hist: pd.DataFrame, df_tft: pd.DataFrame) -> go.Fig
         subplot_titles=[
             "BIENESTAR ACUMULADO — Rusia",
             "BIENESTAR ACUMULADO — UE",
-            "Δ BIENESTAR (TFT − Histórico)  ·  rojo=Rusia pierde · azul=UE gana",
-            "% COOPERACIÓN MUTUA (30d)  ·  rojo=Histórico · verde=TFT",
+            "Δ BIENESTAR: TFT vs Histórico",
+            "% COOPERACIÓN MUTUA (30d)",
         ],
         vertical_spacing=0.12,
         horizontal_spacing=0.08,
@@ -1491,6 +1491,12 @@ def fig_tft_vs_historical(df_hist: pd.DataFrame, df_tft: pd.DataFrame) -> go.Fig
     fig.add_hline(y=0, line_dash="dot",
                   line_color="rgba(255,255,255,0.25)", line_width=1.5,
                   row=2, col=1)
+    fig.add_annotation(
+        x=0.01, y=0.18, xref="paper", yref="paper",
+        text="🔴 Rusia pierde · 🔵 UE gana",
+        font=dict(size=8, color="#94a3b8"),
+        showarrow=False, bgcolor="rgba(0,0,0,0.4)",
+    )
 
     # ── Fila 2 der: % cooperación mutua — colores distintos ──
     fig.add_trace(go.Scatter(
@@ -1511,6 +1517,13 @@ def fig_tft_vs_historical(df_hist: pd.DataFrame, df_tft: pd.DataFrame) -> go.Fig
     ), row=2, col=2)
     fig.add_hline(y=50, line_dash="dot",
                   line_color="rgba(255,255,255,0.18)", row=2, col=2)
+    fig.add_annotation(
+        x=0.99, y=0.18, xref="paper", yref="paper",
+        text="🔴 Histórico · 🟢 Con TFT",
+        font=dict(size=8, color="#94a3b8"),
+        showarrow=False, bgcolor="rgba(0,0,0,0.4)",
+        xanchor="right",
+    )
 
     fig.update_layout(
         paper_bgcolor=_BG, plot_bgcolor=_SRF,
