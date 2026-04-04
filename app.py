@@ -1424,6 +1424,106 @@ def fig_inflation_comparison(df: pd.DataFrame) -> go.Figure:
     return fig
 
 
+
+def fig_tft_vs_historical(df_hist: pd.DataFrame, df_tft: pd.DataFrame) -> go.Figure:
+    """
+    Comparativa PIB e Inflación: comportamiento histórico vs Rusia TFT puro.
+    Valida empíricamente la tesis de Axelrod & Hamilton (1981):
+    TFT maximiza el bienestar mutuo en horizontes largos.
+    """
+    fig = make_subplots(
+        rows=2, cols=2,
+        subplot_titles=[
+            "BIENESTAR ACUMULADO — Rusia",
+            "BIENESTAR ACUMULADO — UE",
+            "PIB UE (30d) — Histórico vs TFT",
+            "% Cooperación Mutua (30d)",
+        ],
+        vertical_spacing=0.12,
+        horizontal_spacing=0.08,
+    )
+
+    # ── Fila 1: Bienestar acumulado ──────────────────────────
+    for ci, (player, col, ch, ct) in enumerate([
+        ("Rusia", "cum_ru", _RU, "#fca5a5"),
+        ("UE",    "cum_eu", _EU, "#7dd3fc"),
+    ], 1):
+        fig.add_trace(go.Scatter(
+            x=df_hist["Date"], y=df_hist[col],
+            name=f"{player} — Histórico",
+            mode="lines", line=dict(color=ch, width=2.2),
+            hovertemplate=f"{player} hist: %{{y:,.0f}}<extra></extra>",
+            legendgroup="hist", showlegend=(ci==1),
+        ), row=1, col=ci)
+        fig.add_trace(go.Scatter(
+            x=df_tft["Date"], y=df_tft[col],
+            name=f"{player} — Rusia TFT",
+            mode="lines", line=dict(color=ct, width=2.2, dash="dash"),
+            fill="tonexty",
+            fillcolor=f"rgba({'248,113,113' if ci==1 else '56,189,248'},0.08)",
+            hovertemplate=f"{player} TFT: %{{y:,.0f}}<extra></extra>",
+            legendgroup="tft", showlegend=(ci==1),
+        ), row=1, col=ci)
+
+    # ── Fila 2 izq: PIB UE ──────────────────────────────────
+    macro = load_macro_data()
+    fig.add_trace(go.Scatter(
+        x=df_hist["Date"], y=df_hist["gdp_eu_30d"],
+        name="PIB UE — Histórico",
+        mode="lines", line=dict(color=_EU, width=2),
+        hovertemplate="PIB UE hist: %{y:.2f}%<extra></extra>",
+        legendgroup="hist", showlegend=False,
+    ), row=2, col=1)
+    fig.add_trace(go.Scatter(
+        x=df_tft["Date"], y=df_tft["gdp_eu_30d"],
+        name="PIB UE — Rusia TFT",
+        mode="lines", line=dict(color="#7dd3fc", width=2, dash="dash"),
+        hovertemplate="PIB UE TFT: %{y:.2f}%<extra></extra>",
+        legendgroup="tft", showlegend=False,
+    ), row=2, col=1)
+    fig.add_hline(y=0, line_dash="dot",
+                  line_color="rgba(255,255,255,0.15)", row=2, col=1)
+
+    # ── Fila 2 der: % cooperación mutua ─────────────────────
+    fig.add_trace(go.Scatter(
+        x=df_hist["Date"], y=df_hist["coop_30d"],
+        name="CC% — Histórico",
+        mode="lines", line=dict(color=_GRN, width=2),
+        fill="tozeroy", fillcolor="rgba(52,211,153,0.06)",
+        hovertemplate="CC hist: %{y:.1f}%<extra></extra>",
+        legendgroup="hist", showlegend=False,
+    ), row=2, col=2)
+    fig.add_trace(go.Scatter(
+        x=df_tft["Date"], y=df_tft["coop_30d"],
+        name="CC% — Rusia TFT",
+        mode="lines", line=dict(color="#86efac", width=2, dash="dash"),
+        hovertemplate="CC TFT: %{y:.1f}%<extra></extra>",
+        legendgroup="tft", showlegend=False,
+    ), row=2, col=2)
+    fig.add_hline(y=50, line_dash="dot",
+                  line_color="rgba(255,255,255,0.15)", row=2, col=2)
+
+    fig.update_layout(
+        paper_bgcolor=_BG, plot_bgcolor=_SRF,
+        font=dict(family="monospace", color="#e2e8f0", size=10),
+        height=500,
+        title=dict(
+            text="VALIDACIÓN AXELROD — Comportamiento Histórico vs TFT Puro",
+            font=dict(size=12), x=0,
+        ),
+        legend=dict(
+            bgcolor="rgba(0,0,0,0.4)", borderwidth=0,
+            font=dict(size=9), orientation="h",
+            y=-0.08, x=0,
+        ),
+        hovermode="x unified",
+        margin=dict(l=12, r=12, t=52, b=60),
+    )
+    fig.update_xaxes(gridcolor=_GRD, tickfont=dict(size=9))
+    fig.update_yaxes(gridcolor=_GRD, tickfont=dict(size=9))
+    return fig
+
+
 def render_energy_crisis_tab():
     """
     Dashboard interactivo de Teoría de Juegos Geopolítica.
@@ -1664,6 +1764,109 @@ def render_energy_crisis_tab():
         )
 
     # ════════════════════════════════════════════════════════
+    # ════════════════════════════════════════════════════════
+    # SECCIÓN AXELROD-HAMILTON: VALIDACIÓN EMPÍRICA
+    # ════════════════════════════════════════════════════════
+    st.markdown("---")
+    st.markdown("### 📐 Validación Axelrod & Hamilton (1981) — ¿Qué hubiera pasado con TFT?")
+
+    # Banner de la tesis central
+    st.markdown("""
+    <div style="background:rgba(14,20,45,0.8);border:1px solid rgba(56,189,248,0.20);
+                border-radius:6px;padding:14px 20px;margin-bottom:14px;">
+      <p style="font-size:9px;letter-spacing:.14em;color:#475569;
+                text-transform:uppercase;margin:0 0 6px 0;">
+        Axelrod & Hamilton · <em>The Evolution of Cooperation</em> · Science, 1981
+      </p>
+      <p style="font-size:13px;color:#e2e8f0;margin:0 0 6px 0;">
+        <b>"En juegos repetidos con horizonte suficientemente largo (w alto),
+        TIT FOR TAT es la estrategia evolutivamente estable:
+        cooperar primero, castigar la traición inmediatamente,
+        perdonar tras la represalia."</b>
+      </p>
+      <p style="font-size:11px;color:#64748b;margin:0;">
+        Si Rusia hubiera seguido TFT desde 2021 — cooperando inicialmente
+        y respondiendo de forma proporcional a las sanciones en lugar de
+        escalar unilateralmente los cortes — ¿habrían sido mejores los
+        resultados económicos para ambas partes?
+      </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.spinner("Simulando escenario TFT…"):
+        df_tft = simulate_ipd(
+            df_daily_full, df_stor_full,
+            ec_T, ec_R, ec_P, ec_S,
+            flow_thresh, eu_strategy,
+            date_start, date_end,
+            ru_strategy="Tit-for-Tat",
+        )
+
+    if not df_tft.empty:
+        # Métricas comparativas
+        tft_cc  = ((df_tft["move_russia"]=="C") & (df_tft["move_eu"]=="C")).mean() * 100
+        hist_cc = ((df_sim["move_russia"]=="C") & (df_sim["move_eu"]=="C")).mean() * 100
+        tft_ru  = df_tft["cum_ru"].iloc[-1]
+        hist_ru = df_sim["cum_ru"].iloc[-1]
+        tft_eu  = df_tft["cum_eu"].iloc[-1]
+        hist_eu = df_sim["cum_eu"].iloc[-1]
+
+        vm1, vm2, vm3, vm4 = st.columns(4)
+        vm1.metric("🤝 CC% con TFT",
+                   f"{tft_cc:.1f}%",
+                   delta=f"{tft_cc - hist_cc:+.1f}pp vs histórico",
+                   delta_color="normal")
+        vm2.metric("🇷🇺 Bienestar Rusia TFT",
+                   f"{tft_ru:,.0f} pts",
+                   delta=f"{tft_ru - hist_ru:+,.0f} vs histórico",
+                   delta_color="normal")
+        vm3.metric("🇪🇺 Bienestar UE TFT",
+                   f"{tft_eu:,.0f} pts",
+                   delta=f"{tft_eu - hist_eu:+,.0f} vs histórico",
+                   delta_color="normal")
+        vm4.metric("📊 Bienestar total TFT",
+                   f"{tft_ru + tft_eu:,.0f} pts",
+                   delta=f"{(tft_ru+tft_eu)-(hist_ru+hist_eu):+,.0f} vs histórico",
+                   delta_color="normal")
+
+        st.plotly_chart(
+            fig_tft_vs_historical(df_sim, df_tft),
+            use_container_width=True,
+        )
+
+        # Interpretación académica
+        total_gain = (tft_ru + tft_eu) - (hist_ru + hist_eu)
+        winner = "ambas partes" if (tft_ru > hist_ru and tft_eu > hist_eu)                  else ("Rusia" if tft_ru > hist_ru else "la UE")
+        with st.expander("📖 Interpretación — conexión con Axelrod & Hamilton (1981)", expanded=True):
+            st.markdown(f"""
+            **¿Qué dice el modelo?**
+
+            Con TFT, la tasa de cooperación mutua (CC) sería de **{tft_cc:.1f}%**
+            frente al **{hist_cc:.1f}%** histórico — una diferencia de
+            **{tft_cc - hist_cc:+.1f} puntos porcentuales**.
+            El bienestar conjunto {'**aumentaría**' if total_gain > 0 else '**disminuiría**'}
+            en **{abs(total_gain):,.0f} puntos**, beneficiando principalmente a {winner}.
+
+            **Conexión con Axelrod & Hamilton (1981):**
+
+            El artículo demuestra que TFT gana los torneos de DP iterado por tres razones:
+            1. **Amabilidad:** coopera primero — evita conflictos innecesarios
+            2. **Provocabilidad:** castiga de inmediato cualquier defección
+            3. **Perdón:** vuelve a cooperar tras castigar — no escala indefinidamente
+
+            El comportamiento histórico de Rusia ({'se acerca' if hist_cc > 20 else 'se aleja'}
+            del TFT según el identificador de estrategia) muestra que la escalada unilateral
+            de cortes — sin señales de disposición a cooperar — viola el principio 3
+            (perdón), llevando al sistema hacia el equilibrio de Nash subóptimo (DD)
+            en lugar del óptimo de Pareto (CC).
+
+            **Implicación de política:** si los actores geopolíticos siguieran TFT,
+            el modelo predice {'mayor estabilidad energética y mejor desempeño económico' 
+            if total_gain > 0 else 'resultados similares a los históricos'},
+            lo que es consistente con la predicción central de Axelrod & Hamilton (1981)
+            sobre la evolución de la cooperación en sistemas con sombra del futuro alta.
+            """)
+
     # SECCIÓN D: IDENTIFICADOR DE ESTRATEGIA + ANÁLISIS AXELROD
     # ════════════════════════════════════════════════════════
     st.markdown("---")
