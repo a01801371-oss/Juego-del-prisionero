@@ -1580,24 +1580,27 @@ def render_energy_crisis_tab():
     date_start = pd.Timestamp(date_range[0])
     date_end   = pd.Timestamp(date_range[1])
 
-    # 2. Matriz de pagos
-    st.sidebar.markdown("**💰 Matriz de Pagos**")
-    ec_T = st.sidebar.slider("T — Tentación",  3.0, 15.0, 5.0, 0.5, key="ec_T")
-    ec_R = st.sidebar.slider("R — Recompensa", 1.0, 10.0, 3.0, 0.5, key="ec_R")
-    ec_P = st.sidebar.slider("P — Castigo",    0.0,  5.0, 1.0, 0.5, key="ec_P")
-    ec_S = st.sidebar.slider("S — Sucker",    -3.0,  2.0, 0.0, 0.5, key="ec_S")
+    # 2. Matriz de pagos — valores canonicos Axelrod (1981), fijos
+    ec_T, ec_R, ec_P, ec_S = 5.0, 3.0, 1.0, 0.0
+    valid = True
+    st.sidebar.markdown("**💰 Matriz de Pagos — Axelrod (1981)**")
+    st.sidebar.info(
+        "**T=5 · R=3 · P=1 · S=0** (fijos) \n\n"
+        "Valores canónicos del paper original. Garantizan T > R > P ≥ S "
+        "y w crítico = 0.5, condición de estabilidad evolutiva de TFT. \n"
+        "Axelrod & Hamilton (1981). Science, 211(4489), 1390-1396."
+    )
 
-    valid = (ec_T > ec_R > ec_P >= ec_S)
-    if not valid:
-        st.sidebar.error("❌ Requiere T > R > P ≥ S")
-    else:
-        st.sidebar.success(f"✅ T={ec_T} R={ec_R} P={ec_P} S={ec_S}")
-
-    # 3. Umbral de flujo para Rusia
-    st.sidebar.markdown("**🎚️ Umbral Rusia (mcm/día)**")
-    flow_thresh = st.sidebar.slider(
-        "Flujo mínimo para cooperar", 100, 450, 250, 10, key="ec_flow",
-        help="D si flujo < este umbral  O caída ≥ 20% mensual",
+    # 3. Umbral fijo 250 mcm — justificación empírica
+    flow_thresh = 250
+    st.sidebar.markdown("**🎚️ Umbral de cooperación Rusia**")
+    st.sidebar.info(
+        "**Fijo: 250 mcm/día** \n\n"
+        "El flujo mínimo histórico durante el período de cooperación normal "
+        "(2021 – feb 2022) fue exactamente 250.4 mcm/día — piso observado antes "
+        "de cualquier corte deliberado. Todo valor por debajo representa una "
+        "reducción fuera del rango contractual habitual. "
+        "Fuente: ENTSOG / daily\_data\_2026-03-12.csv"
     )
 
     # 4. Estrategia de Europa
@@ -1662,7 +1665,7 @@ def render_energy_crisis_tab():
     """.format(thresh=flow_thresh), unsafe_allow_html=True)
 
     if not valid:
-        st.error("⚠ Corrige la matriz de pagos en el sidebar (T > R > P ≥ S).")
+        st.error("Corrige la matriz de pagos.")
         return
 
     # ════════════════════════════════════════════════════════
