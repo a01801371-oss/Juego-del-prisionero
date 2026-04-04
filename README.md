@@ -31,24 +31,21 @@
 <img width="1280" height="652" alt="image" src="https://github.com/user-attachments/assets/f09e13f4-f039-4818-be67-c4ede969ecdb" />
 
 ### Tab 7 — Crisis Energética Rusia–UE
-<!-- SCREENSHOT: Dashboard geopolítico con gráficas de flujo de gas, bienestar acumulado, PIB e inflación -->
-```
-[Insertar screenshot aquí]
-```
+<img width="1303" height="714" alt="image" src="https://github.com/user-attachments/assets/ac920851-6510-4dd1-a055-dce742eae2d3" />
+<img width="1295" height="738" alt="image" src="https://github.com/user-attachments/assets/4dcfcd3f-27cc-4d6a-9c6e-659edd7adceb" />
+<img width="1307" height="397" alt="image" src="https://github.com/user-attachments/assets/65b816ca-9ceb-4c33-b01a-fc8e95c9b1ec" />
+<img width="1302" height="401" alt="image" src="https://github.com/user-attachments/assets/4575f6cc-3b4d-40fa-a067-433f972ee93d" />
+<img width="1303" height="470" alt="image" src="https://github.com/user-attachments/assets/1bfc7e94-1157-4bbf-bce1-a0b6511327fa" />
 
 ### Tab 7 — Validación Axelrod & Hamilton
-<!-- SCREENSHOT: Comparativa histórico vs TFT puro con las 4 subgráficas -->
-```
-[Insertar screenshot aquí]
-```
+<img width="1296" height="774" alt="image" src="https://github.com/user-attachments/assets/8958a0a6-a85c-45e6-bd13-b8eb6fbdfa0d" />
 
 ### Tab 8 — Anexo Tests RNG
-<!-- SCREENSHOT: KS test, histograma y lag plot del generador PCG64 -->
-```
-[Insertar screenshot aquí]
-```
+<img width="1271" height="216" alt="image" src="https://github.com/user-attachments/assets/a879af33-a656-44c1-b05f-87b97bc762b7" />
+<img width="1329" height="451" alt="image" src="https://github.com/user-attachments/assets/7730fc6e-62ce-4c6a-abfc-d75973434a91" />
+<img width="1301" height="516" alt="image" src="https://github.com/user-attachments/assets/fbdbd3b4-3f2b-43b5-9b34-b7f87739d26c" />
+<img width="1128" height="209" alt="image" src="https://github.com/user-attachments/assets/8ba92c19-6f07-44f2-9578-0469365a29c0" />
 
----
 
 ## 📋 Requisitos del sistema
 
