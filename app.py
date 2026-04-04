@@ -532,7 +532,6 @@ def load_route_data() -> pd.DataFrame:
 
 
 
-@st.cache_data(show_spinner=False)
 def load_macro_data() -> pd.DataFrame:
     """
     Carga real_macro_data.csv — series diarias interpoladas de datos reales.
