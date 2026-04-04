@@ -26,21 +26,43 @@ RNG = np.random.default_rng(np.random.PCG64(42))
 # Clase base para estrategias
 # ─────────────────────────────────────────────
 class Strategy:
-    """Clase base que gestiona el historial de movimientos."""
+    """
+    Clase base para todas las estrategias del torneo.
+
+    Gestiona el historial de movimientos propios y del oponente,
+    proporcionando la memoria necesaria para estrategias reactivas.
+    Todas las estrategias heredan de esta clase e implementan move().
+    """
     name: str = "Base"
 
     def __init__(self):
+        """Inicializa los historiales vacíos al crear la estrategia."""
         self.my_history: List[str] = []
         self.opp_history: List[str] = []
 
     def reset(self):
+        """
+        Reinicia la memoria de la estrategia.
+        Se llama antes de cada partida para garantizar independencia
+        entre los n_juegos del mismo par de estrategias.
+        """
         self.my_history = []
         self.opp_history = []
 
     def move(self) -> str:
+        """
+        Decide la próxima acción: 'C' (cooperar) o 'D' (defectar).
+        Cada subclase implementa su propia lógica de decisión
+        basándose en my_history y opp_history.
+        """
         raise NotImplementedError
 
     def update(self, my_move: str, opp_move: str):
+        """
+        Registra el resultado de la ronda en el historial.
+        Debe llamarse después de cada ronda para que la estrategia
+        pueda aprender del comportamiento del oponente.
+        """
         self.my_history.append(my_move)
         self.opp_history.append(opp_move)
 
@@ -287,6 +309,19 @@ STRATEGY_NAMES = [s.name for s in ALL_STRATEGIES]
 # ─────────────────────────────────────────────
 
 def get_payoff(my_move, opp_move, T, R, P, S):
+    """
+    Calcula el pago de ambos jugadores según la matriz (T, R, P, S).
+
+    Args:
+        my_move:  acción del jugador A ('C' o 'D')
+        opp_move: acción del jugador B ('C' o 'D')
+        T: Tentación — pago por traicionar cuando el oponente coopera
+        R: Recompensa — pago por cooperación mutua
+        P: Castigo   — pago por traición mutua
+        S: Sucker    — pago por cooperar cuando el oponente traiciona
+    Returns:
+        Tupla (pago_A, pago_B). Precondición: T > R > P ≥ S.
+    """
     if my_move == 'C' and opp_move == 'C': return R, R
     if my_move == 'C' and opp_move == 'D': return S, T
     if my_move == 'D' and opp_move == 'C': return T, S
@@ -294,6 +329,21 @@ def get_payoff(my_move, opp_move, T, R, P, S):
 
 
 def play_game(s1, s2, rounds, T, R, P, S, w):
+    """
+    Ejecuta una partida completa entre dos estrategias.
+
+    Implementa el horizonte infinito simulado de Axelrod: el juego
+    termina con probabilidad (1-w) en cada ronda después de la primera,
+    modelando la incertidumbre sobre interacciones futuras.
+
+    Args:
+        s1, s2:  instancias de estrategias a enfrentar
+        rounds:  número máximo de rondas
+        T,R,P,S: matriz de pagos
+        w:       probabilidad de que el juego continúe (0 < w < 1)
+    Returns:
+        (score1, score2, historial_s1, historial_s2) normalizados por rondas.
+    """
     s1.reset(); s2.reset()
     score1 = score2 = 0.0
     h1, h2 = [], []
@@ -309,6 +359,23 @@ def play_game(s1, s2, rounds, T, R, P, S, w):
 
 
 def run_tournament(selected_names, T, R, P, S, w, games=5, rounds=200):
+    """
+    Ejecuta el torneo Round-Robin completo entre las estrategias seleccionadas.
+
+    Cada par (i, j) juega `games` partidas de hasta `rounds` rondas.
+    Los scores se normalizan por rondas efectivas para comparabilidad.
+    También ejecuta cada estrategia contra sí misma para la diagonal
+    de la matriz de pagos.
+
+    Args:
+        selected_names: lista de nombres de estrategias a incluir
+        T,R,P,S:        matriz de pagos (debe cumplir T > R > P ≥ S)
+        w:              probabilidad de continuación (default 0.995)
+        games:          partidas por par (default 5)
+        rounds:         rondas máximas por partida (default 200)
+    Returns:
+        (payoff_matrix, ranking_df, h2h_data)
+    """
     name_to_class  = {s.name: s for s in ALL_STRATEGIES}
     strategies     = {n: name_to_class[n] for n in selected_names}
     n              = len(selected_names)
@@ -554,6 +621,11 @@ def load_macro_data() -> pd.DataFrame:
     daily_idx = pd.date_range("2021-01-01", "2026-03-12", freq="D")
 
     def _interp(anchor_dict):
+        """
+        Interpola un diccionario de puntos de anclaje {fecha: valor}
+        a una serie diaria continua usando interpolación temporal lineal.
+        Método estándar para convertir series trimestrales/anuales a diarias.
+        """
         s = pd.Series({pd.Timestamp(k): v for k, v in anchor_dict.items()})
         return (s.reindex(s.index.union(daily_idx))
                  .interpolate("time")
@@ -1600,7 +1672,7 @@ def render_energy_crisis_tab():
         "(2021 – feb 2022) fue exactamente 250.4 mcm/día — piso observado antes "
         "de cualquier corte deliberado. Todo valor por debajo representa una "
         "reducción fuera del rango contractual habitual. "
-        "Fuente: ENTSOG / daily\_data\_2026-03-12.csv"
+        "Fuente: ENTSOG / daily_data_2026-03-12.csv"
     )
 
     # 4. Estrategia de Europa
@@ -2520,6 +2592,16 @@ def tab_rng_tests():
 # ─────────────────────────────────────────────
 
 def main():
+    """
+    Punto de entrada principal del dashboard Streamlit.
+
+    Configura la página, renderiza el sidebar con los parámetros
+    del torneo y distribuye el contenido en 8 tabs:
+    Ranking, Heatmap, Head-to-Head, Distribución, Estrategias,
+    Análisis Estadístico, Crisis Energética y Anexo RNG.
+    El estado del torneo se persiste en st.session_state para
+    evitar recálculos innecesarios entre interacciones del usuario.
+    """
     st.set_page_config(
         page_title="Prisoner's Dilemma Tournament",
         page_icon="🎲",
