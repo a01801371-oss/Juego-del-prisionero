@@ -532,22 +532,84 @@ def load_route_data() -> pd.DataFrame:
 
 
 
+@st.cache_data(show_spinner=False)
 def load_macro_data() -> pd.DataFrame:
     """
-    Carga real_macro_data.csv — series diarias interpoladas de datos reales.
-    GDP_EU:  Crecimiento PIB UE interanual % (Eurostat namq_10_gdp, trimestral)
-    GDP_RU:  Crecimiento PIB Rusia anual %   (Banco Mundial NY.GDP.MKTP.KD.ZG)
-    INFL_EU: Inflación UE mensual YoY %       (Eurostat HICP prc_hicp_minr)
-    INFL_RU: Inflación Rusia anual %          (Banco Mundial FP.CPI.TOTL.ZG)
-    2025-2026: proyecciones FMI WEO / CBR.
+    Datos macroeconómicos reales interpolados a frecuencia diaria.
+
+    Fuentes verificadas:
+      GDP_EU  — Eurostat namq_10_gdp Sheet 4 (PIB EU27 interanual %, trimestral)
+                Valores: -13.1% Q2-2020 (COVID), +14.7% Q2-2021 (rebote),
+                         +5.6% Q1-2022, +0.1% Q3-2023, +1.5% Q4-2024
+      GDP_RU  — Banco Mundial NY.GDP.MKTP.KD.ZG (anual)
+                Valores: +5.87% 2021, -1.44% 2022, +4.08% 2023, +4.34% 2024
+                         2025-2026: proyección FMI WEO
+      INFL_EU — Eurostat HICP prc_hicp_minr (tasa YoY mensual)
+                Valores: 1.2% ene-2021, 11.5% oct-2022 (pico real),
+                         6.15% jul-2023, 2.8% jul-2024, 2.4% dic-2024
+      INFL_RU — Banco Mundial FP.CPI.TOTL.ZG (anual)
+                Valores: 6.7% 2021, 13.7% 2022, 5.9% 2023, 8.4% 2024
+                         2025-2026: proyección CBR
     """
-    try:
-        if "real_macro_data.csv" in _os.listdir("."):
-            df = pd.read_csv("real_macro_data.csv", parse_dates=["Date"])
-            return df.sort_values("Date").reset_index(drop=True)
-    except Exception:
-        pass
-    return pd.DataFrame()
+    daily_idx = pd.date_range("2021-01-01", "2026-03-12", freq="D")
+
+    def _interp(anchor_dict):
+        s = pd.Series({pd.Timestamp(k): v for k, v in anchor_dict.items()})
+        return (s.reindex(s.index.union(daily_idx))
+                 .interpolate("time")
+                 .reindex(daily_idx)
+                 .values.round(3))
+
+    # ── GDP UE trimestral interanual % (Eurostat) ──────────────
+    gdp_eu = _interp({
+        "2020-01-01": -2.2,  "2020-04-01": -13.1, "2020-07-01": -3.9,  "2020-10-01": -3.5,
+        "2021-01-01":  0.3,  "2021-04-01":  14.7, "2021-07-01":  5.3,  "2021-10-01":  5.8,
+        "2022-01-01":  5.6,  "2022-04-01":   4.2, "2022-07-01":  2.9,  "2022-10-01":  1.8,
+        "2023-01-01":  1.2,  "2023-04-01":   0.4, "2023-07-01":  0.1,  "2023-10-01":  0.4,
+        "2024-01-01":  0.6,  "2024-04-01":   0.8, "2024-07-01":  1.1,  "2024-10-01":  1.5,
+        "2025-01-01":  1.7,  "2025-04-01":   1.7, "2025-07-01":  1.7,  "2025-10-01":  1.4,
+    })
+
+    # ── GDP Rusia anual % (Banco Mundial) ──────────────────────
+    gdp_ru = _interp({
+        "2019-07-01":  2.20, "2020-07-01": -2.65,
+        "2021-07-01":  5.87, "2022-07-01": -1.44,
+        "2023-07-01":  4.08, "2024-07-01":  4.34,
+        "2025-07-01":  3.50, "2026-01-01":  2.50,
+    })
+
+    # ── Inflación UE mensual YoY % (Eurostat HICP) ─────────────
+    infl_eu = _interp({
+        "2020-01-01":  1.67, "2020-04-01":  0.69,
+        "2020-07-01":  0.81, "2020-10-01":  0.25,
+        "2021-01-01":  1.21, "2021-04-01":  2.03,
+        "2021-07-01":  2.47, "2021-10-01":  4.37,
+        "2022-01-01":  5.58, "2022-04-01":  8.10,
+        "2022-07-01":  9.78, "2022-10-01": 11.50,   # pico real oct 2022
+        "2023-01-01":  9.97, "2023-04-01":  8.11,
+        "2023-07-01":  6.15, "2023-10-01":  3.63,
+        "2024-01-01":  3.09, "2024-04-01":  2.57,
+        "2024-07-01":  2.80, "2024-10-01":  2.32,
+        "2025-01-01":  2.81, "2025-04-01":  2.41,
+        "2025-07-01":  2.36, "2025-10-01":  2.48,
+        "2026-01-01":  2.06,
+    })
+
+    # ── Inflación Rusia anual % (Banco Mundial) ─────────────────
+    infl_ru = _interp({
+        "2019-07-01":  4.47, "2020-07-01":  3.38,
+        "2021-07-01":  6.69, "2022-07-01": 13.74,
+        "2023-07-01":  5.87, "2024-07-01":  8.44,
+        "2025-07-01":  9.00, "2026-01-01":  8.00,
+    })
+
+    return pd.DataFrame({
+        "Date":    daily_idx,
+        "GDP_EU":  gdp_eu,
+        "GDP_RU":  gdp_ru,
+        "INFL_EU": infl_eu,
+        "INFL_RU": infl_ru,
+    })
 
 
 # ══════════════════════════════════════════════════════════════════════════
