@@ -531,6 +531,26 @@ def load_route_data() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+
+@st.cache_data(show_spinner=False)
+def load_macro_data() -> pd.DataFrame:
+    """
+    Carga real_macro_data.csv — series diarias interpoladas de datos reales.
+    GDP_EU:  Crecimiento PIB UE interanual % (Eurostat namq_10_gdp, trimestral)
+    GDP_RU:  Crecimiento PIB Rusia anual %   (Banco Mundial NY.GDP.MKTP.KD.ZG)
+    INFL_EU: Inflación UE mensual YoY %       (Eurostat HICP prc_hicp_minr)
+    INFL_RU: Inflación Rusia anual %          (Banco Mundial FP.CPI.TOTL.ZG)
+    2025-2026: proyecciones FMI WEO / CBR.
+    """
+    try:
+        if "real_macro_data.csv" in _os.listdir("."):
+            df = pd.read_csv("real_macro_data.csv", parse_dates=["Date"])
+            return df.sort_values("Date").reset_index(drop=True)
+    except Exception:
+        pass
+    return pd.DataFrame()
+
+
 # ══════════════════════════════════════════════════════════════════════════
 #  LÓGICA DE MOVIDAS — JUGADORES A y B
 # ══════════════════════════════════════════════════════════════════════════
@@ -746,7 +766,22 @@ def simulate_ipd(
 
     # ── Parámetros base de impacto económico ──────────────────────
     # Escalados por la magnitud de T (cuanto más alto T, más severos los efectos)
-    _t_factor = T / 5.0   # normalizado respecto al default T=5
+    # ── Datos macroeconómicos reales ───────────────────────────────────
+    _macro_df  = load_macro_data()
+    _has_real  = not _macro_df.empty
+    if _has_real:
+        _macro_f = (
+            _macro_df[(_macro_df["Date"] >= date_start) & (_macro_df["Date"] <= date_end)]
+            .set_index("Date")
+            .reindex(pd.date_range(date_start, date_end, freq="D"))
+            .interpolate("time")
+            .reset_index()
+            .rename(columns={"index": "Date"})
+        )
+    else:
+        _macro_f = pd.DataFrame()
+
+    _t_factor = T / 5.0   # para proxies de fallback
 
     _base_econ = {
         ("C","C"): (2.0,  2.0,  2.5),    # (gdp_ru, gdp_eu, inf_eu)
@@ -760,29 +795,53 @@ def simulate_ipd(
 
     records = []
     cum_ru = cum_eu = 0.0
+    _loop_idx = 0
 
     for _, row in df.iterrows():
         key = (row["move_russia"], row["move_eu"])
         pr, pe    = _base_payoffs.get(key, (R, R))
         gdp_ru_b, gdp_eu_b, inf_eu_b = _base_econ.get(key, (2.0, 2.0, 2.5))
 
-        # ── Volatilidad estocástica en DD: picos de inflación y contracción ──
-        if key == ("D","D"):
-            # Ruido multiplicativo — simula incertidumbre de crisis total
-            _noise_gdp = float(_rng_noise.normal(0, 1.2))
-            _noise_inf = float(abs(_rng_noise.normal(0, 3.5)))
-            gdp_ru  = gdp_ru_b + _noise_gdp
-            gdp_eu  = gdp_eu_b - abs(_noise_gdp) * 0.8
-            inf_eu  = inf_eu_b + _noise_inf
+        # ── Impacto económico: datos reales + ajuste marginal por outcome DP ──
+        if _has_real and _loop_idx < len(_macro_f):
+            _mr = _macro_f.iloc[_loop_idx]
+            _gdp_eu_r  = float(_mr.get("GDP_EU",  gdp_eu_b))
+            _gdp_ru_r  = float(_mr.get("GDP_RU",  gdp_ru_b))
+            _infl_eu_r = float(_mr.get("INFL_EU", inf_eu_b))
+            if key == ("D","D"):
+                _n1 = float(_rng_noise.normal(0, 0.6))
+                _n2 = float(abs(_rng_noise.normal(0, 2.0)))
+                gdp_eu = _gdp_eu_r + _n1 * 0.5
+                gdp_ru = _gdp_ru_r + _n1 * 0.3
+                inf_eu = _infl_eu_r + _n2
+            elif key == ("D","C"):
+                gdp_eu = _gdp_eu_r - 1.5
+                gdp_ru = _gdp_ru_r + 1.0
+                inf_eu = _infl_eu_r + 3.0
+            elif key == ("C","D"):
+                gdp_eu = _gdp_eu_r + 0.3
+                gdp_ru = _gdp_ru_r - 1.5
+                inf_eu = _infl_eu_r + 0.8
+            else:
+                gdp_eu = _gdp_eu_r
+                gdp_ru = _gdp_ru_r
+                inf_eu = _infl_eu_r
         else:
-            # Ruido suave para trayectorias no-DD
-            _noise  = float(_rng_noise.normal(0, 0.3))
-            gdp_ru  = gdp_ru_b + _noise
-            gdp_eu  = gdp_eu_b + _noise * 0.5
-            inf_eu  = inf_eu_b + abs(_noise) * 0.4
+            if key == ("D","D"):
+                _noise_gdp = float(_rng_noise.normal(0, 1.2))
+                _noise_inf = float(abs(_rng_noise.normal(0, 3.5)))
+                gdp_ru  = gdp_ru_b + _noise_gdp
+                gdp_eu  = gdp_eu_b - abs(_noise_gdp) * 0.8
+                inf_eu  = inf_eu_b + _noise_inf
+            else:
+                _noise  = float(_rng_noise.normal(0, 0.3))
+                gdp_ru  = gdp_ru_b + _noise
+                gdp_eu  = gdp_eu_b + _noise * 0.5
+                inf_eu  = inf_eu_b + abs(_noise) * 0.4
 
         cum_ru += pr; cum_eu += pe
         label = _outcome_labels.get(key, "Cooperación Mutua")
+        _loop_idx += 1
         records.append({
             "score_ru":  pr,    "score_eu":  pe,
             "cum_ru":    cum_ru,"cum_eu":    cum_eu,
@@ -1071,7 +1130,7 @@ def fig_economic_impact(df: pd.DataFrame, T: float) -> go.Figure:
     _add_event_lines(fig, df, row=1)
     fig.update_layout(
         **_LAYOUT, height=440,
-        title_text=f"IMPACTO ECONÓMICO (T={T}) — LA BANDA SE ENSANCHA EN CASTIGO MUTUO (DD)",
+        title_text=f"IMPACTO ECONÓMICO — DATOS REALES (Eurostat/BM) + AJUSTE DP · T={T}",
         title_font=dict(size=11),
     )
     fig.update_xaxes(gridcolor=_GRD, tickfont=dict(size=9))
@@ -1600,7 +1659,12 @@ def render_energy_crisis_tab():
 
     st.markdown("""
     <p style="font-size:11px;color:#475569;margin-top:14px;line-height:1.6;">
-    <b style="color:#94a3b8">Fuentes de datos:</b> ENTSOG, GIE, Bruegel, Eurostat, EC REPowerEU.<br>
+    <b style="color:#94a3b8">Fuentes macro:</b>
+    PIB UE: Eurostat namq_10_gdp (trimestral interanual %) · dato real.<br>
+    PIB Rusia: Banco Mundial NY.GDP.MKTP.KD.ZG (anual) · 2025-26: FMI WEO.<br>
+    Inflación UE: Eurostat HICP prc_hicp_minr (mensual YoY %) · dato real.<br>
+    Inflación Rusia: Banco Mundial FP.CPI.TOTL.ZG (anual) · 2025-26: CBR.<br>
+    <b style="color:#94a3b8">Fuentes de gas:</b> ENTSOG, GIE, Bruegel, EC REPowerEU.<br>
     <b style="color:#94a3b8">Nota:</b> Impactos económicos son proxies ilustrativos escalados por la
     magnitud de T. No son estimaciones econométricas.
     </p>
