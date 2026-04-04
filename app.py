@@ -801,29 +801,26 @@ def simulate_ipd(
         pr, pe    = _base_payoffs.get(key, (R, R))
         gdp_ru_b, gdp_eu_b, inf_eu_b = _base_econ.get(key, (2.0, 2.0, 2.5))
 
-        # ── Impacto económico: datos reales + ajuste marginal por outcome DP ──
+        # ── Impacto económico: datos reales de Eurostat/BM ─────────────────
+        # Con datos reales, la inflación y el PIB ya reflejan la realidad
+        # geopolítica — no necesitan ajuste adicional por outcome del DP.
+        # Solo añadimos ruido estocástico pequeño en DD para la banda de volatilidad.
         if _has_real and _loop_idx < len(_macro_f):
             _mr = _macro_f.iloc[_loop_idx]
             _gdp_eu_r  = float(_mr.get("GDP_EU",  gdp_eu_b))
             _gdp_ru_r  = float(_mr.get("GDP_RU",  gdp_ru_b))
             _infl_eu_r = float(_mr.get("INFL_EU", inf_eu_b))
             if key == ("D","D"):
-                _n1 = float(_rng_noise.normal(0, 0.6))
-                _n2 = float(abs(_rng_noise.normal(0, 2.0)))
-                gdp_eu = _gdp_eu_r + _n1 * 0.5
-                gdp_ru = _gdp_ru_r + _n1 * 0.3
+                # Solo ruido pequeño para hacer visible la banda de volatilidad
+                _n1 = float(_rng_noise.normal(0, 0.25))
+                _n2 = float(abs(_rng_noise.normal(0, 0.5)))
+                gdp_eu = _gdp_eu_r + _n1
+                gdp_ru = _gdp_ru_r + _n1 * 0.5
                 inf_eu = _infl_eu_r + _n2
-            elif key == ("D","C"):
-                gdp_eu = _gdp_eu_r - 1.5
-                gdp_ru = _gdp_ru_r + 1.0
-                inf_eu = _infl_eu_r + 3.0
-            elif key == ("C","D"):
-                gdp_eu = _gdp_eu_r + 0.3
-                gdp_ru = _gdp_ru_r - 1.5
-                inf_eu = _infl_eu_r + 0.8
             else:
-                gdp_eu = _gdp_eu_r
-                gdp_ru = _gdp_ru_r
+                # Datos reales directos sin ajuste
+                gdp_eu = _gdp_eu_r + float(_rng_noise.normal(0, 0.08))
+                gdp_ru = _gdp_ru_r + float(_rng_noise.normal(0, 0.08))
                 inf_eu = _infl_eu_r
         else:
             if key == ("D","D"):
