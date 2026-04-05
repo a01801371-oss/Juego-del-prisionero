@@ -1864,7 +1864,7 @@ def render_energy_crisis_tab():
     # SECCIÓN D: IDENTIFICADOR DE ESTRATEGIA + ANÁLISIS AXELROD
     # ════════════════════════════════════════════════════════
     st.markdown("---")
-    st.markdown("### 🔍 Análisis Axelrod — Comportamiento Real vs Estrategia más parecida")
+    st.markdown("### Comportamiento Real vs Estrategia más parecida")
     st.caption(
         "Compara la secuencia histórica de movidas de Rusia con las 15 estrategias "
         "del catálogo y muestra cuál se parece más."
