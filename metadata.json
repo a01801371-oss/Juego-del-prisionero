@@ -1,0 +1,207 @@
+{
+  "project": {
+    "title": "Torneo del Dilema del Prisionero — Replicación Axelrod & Hamilton (1981)",
+    "course": "Técnicas Computacionales Avanzadas",
+    "professor": "Dr. Leonardo González Tejeda",
+    "date": "2026-04-01",
+    "team": [
+      "Josué Alejandro Montesinos Valerio — A01801371",
+      "Carlo Vázquez — A01748840",
+      "Andre Reyes Rivera — A01659369"
+    ],
+    "repository": "https://github.com/a01801371-oss/Juego-del-prisionero",
+    "dashboard_url": "https://juego-del-prisionero.streamlit.app"
+  },
+  "files": {
+    "daily_data_2026-03-12.csv": {
+      "description": "Flujo diario de gas natural de Rusia hacia Europa (mcm/día) y flujo LNG alternativo",
+      "source": "Bruegel / ENTSOG",
+      "url": "https://www.bruegel.org/dataset/european-natural-gas-imports",
+      "frequency": "Diaria",
+      "date_range": "2021-01-01 / 2026-03-12",
+      "rows": 1897,
+      "columns": {
+        "Date": "Fecha (YYYY-MM-DD)",
+        "Russia": "Flujo de gas ruso en millones de metros cúbicos por día (mcm/día)",
+        "LNG": "Flujo de gas natural licuado alternativo (mcm/día)"
+      },
+      "notes": "Umbral de cooperación fijo en 250 mcm/día — mínimo histórico observado durante período contractual normal (ene 2021 – feb 2022)"
+    },
+    "route_data_2026-03-12.csv": {
+      "description": "Utilización porcentual de las principales rutas de gasoducto Rusia → Europa",
+      "source": "Bruegel / ENTSOG",
+      "url": "https://www.bruegel.org/dataset/european-natural-gas-imports",
+      "frequency": "Diaria",
+      "date_range": "2021-01-01 / 2026-03-12",
+      "columns": {
+        "Date": "Fecha (YYYY-MM-DD)",
+        "Route": "Nombre del gasoducto (Nord Stream 1, Yamal-Europe, Ukrainian GTS, TurkStream)",
+        "Utilisation_pct": "Porcentaje de utilización de capacidad (0–100%)"
+      }
+    },
+    "Weekly_Storage_EU_UA.xlsx": {
+      "description": "Nivel semanal de almacenamiento de gas en Europa y Ucrania (% de capacidad)",
+      "source": "GIE — Gas Infrastructure Europe",
+      "url": "https://www.gie.eu/transparency/databases/storage-database/",
+      "frequency": "Semanal (lunes)",
+      "date_range": "2021-01-04 / 2026-03-10",
+      "columns": {
+        "Week": "Fecha de inicio de semana (YYYY-MM-DD)",
+        "Storage_pct": "Nivel de almacenamiento como porcentaje de capacidad total (0–100%)"
+      },
+      "notes": "Usado para calcular el parámetro w real basado en volatilidad de almacenamiento"
+    },
+    "real_macro_data.csv": {
+      "description": "Series macroeconómicas diarias interpoladas — PIB e inflación de UE y Rusia",
+      "source": "Eurostat / Banco Mundial / FMI WEO / CBR",
+      "frequency": "Diaria (interpolada desde trimestral/mensual/anual)",
+      "date_range": "2021-01-01 / 2026-03-12",
+      "rows": 1897,
+      "columns": {
+        "Date": "Fecha (YYYY-MM-DD)",
+        "GDP_EU": "Crecimiento del PIB de la UE interanual % — Eurostat namq_10_gdp",
+        "GDP_RU": "Crecimiento del PIB de Rusia anual % — Banco Mundial NY.GDP.MKTP.KD.ZG",
+        "INFL_EU": "Inflación UE tasa YoY % — Eurostat HICP prc_hicp_minr",
+        "INFL_RU": "Inflación Rusia anual % — Banco Mundial FP.CPI.TOTL.ZG"
+      },
+      "interpolation_method": "Interpolación lineal temporal (pandas interpolate='time')",
+      "projections_2025_2026": {
+        "GDP_RU": "FMI World Economic Outlook 2025",
+        "INFL_RU": "Banco Central de Rusia (CBR) proyecciones"
+      }
+    },
+    "ranking_torneo.csv": {
+      "description": "Resultados del torneo Round-Robin — ranking final de las 15 estrategias",
+      "source": "Generado por app.py — descargable desde Tab Ranking",
+      "columns": {
+        "Estrategia": "Nombre de la estrategia",
+        "Score Total": "Score acumulado normalizado por rondas efectivas"
+      },
+      "parameters": {
+        "T": 5,
+        "R": 3,
+        "P": 1,
+        "S": 0,
+        "w": 0.995,
+        "games_per_pair": 5,
+        "rounds_per_game": 200,
+        "strategies": 15,
+        "rng_seed": 42,
+        "rng_algorithm": "PCG64"
+      }
+    },
+    "ipd_energia_simulacion.csv": {
+      "description": "Resultados diarios de la simulación del caso de estudio energético Rusia–UE",
+      "source": "Generado por app.py — descargable desde Tab Crisis Energética",
+      "columns": {
+        "Date": "Fecha",
+        "Russia": "Flujo de gas (mcm/día)",
+        "LNG": "Flujo LNG (mcm/día)",
+        "move_russia": "Movida de Rusia — C (coopera) o D (defecta)",
+        "move_eu": "Movida de la UE — C o D",
+        "outcome": "Resultado del día (Cooperación Mutua / Rusia defecta / UE responde / Castigo mutuo)",
+        "score_ru": "Pago diario de Rusia según matriz T,R,P,S",
+        "score_eu": "Pago diario de la UE según matriz T,R,P,S",
+        "cum_ru": "Bienestar acumulado de Rusia",
+        "cum_eu": "Bienestar acumulado de la UE",
+        "gdp_eu_30d": "PIB UE media móvil 30 días (%)",
+        "gdp_ru_30d": "PIB Rusia media móvil 30 días (%)",
+        "inf_eu_30d": "Inflación UE media móvil 30 días (%)",
+        "inf_ru_30d": "Inflación Rusia media móvil 30 días (%)",
+        "coop_30d": "Tasa de cooperación mutua CC media móvil 30 días (%)",
+        "dd_30d": "Tasa de crisis total DD media móvil 30 días (%)"
+      }
+    },
+    "rng_samples_pcg64_seed42.csv": {
+      "description": "10,000 muestras del generador PCG64(seed=42) para tests de calidad RNG",
+      "source": "Generado por app.py — descargable desde Tab Anexo RNG",
+      "columns": {
+        "sample_index": "Índice de la muestra (0–9999)",
+        "value": "Valor aleatorio U(0,1) generado por PCG64(seed=42)"
+      },
+      "rng_tests": {
+        "kolmogorov_smirnov": {
+          "statistic": 0.007441,
+          "p_value": 0.6343,
+          "result": "PASA"
+        },
+        "chi_squared": {
+          "statistic": 5.91,
+          "p_value": 0.7489,
+          "result": "PASA"
+        },
+        "lag1_correlation": {
+          "r": 0.004109,
+          "result": "PASA"
+        }
+      }
+    }
+  },
+  "model": {
+    "type": "Iterated Prisoner's Dilemma — Round-Robin Tournament",
+    "reference": "Axelrod, R. & Hamilton, W.D. (1981). Science, 211(4489), 1390-1396",
+    "payoff_matrix": {
+      "T": 5,
+      "R": 3,
+      "P": 1,
+      "S": 0
+    },
+    "w": 0.995,
+    "w_critical": 0.5,
+    "stability_condition": "w >= (T-R)/(T-P) = 0.5 — satisfecha con w=0.995",
+    "strategies": [
+      "TIT FOR TAT",
+      "GRIM",
+      "PAVLOV",
+      "ALL-D",
+      "ALL-C",
+      "TIT FOR TWO TATS",
+      "RANDOM",
+      "JOSS",
+      "GRADUAL",
+      "ADAPTIVE",
+      "EVOLVED-NN",
+      "PSO-PLAYER",
+      "MEMORY-3",
+      "FRIEDMAN",
+      "TESTER"
+    ],
+    "rng": {
+      "algorithm": "PCG64",
+      "seed": 42,
+      "implementation": "numpy.random.default_rng(numpy.random.PCG64(42))",
+      "period": "2^128"
+    },
+    "geopolitical_case_study": {
+      "players": [
+        "Rusia (Jugador A)",
+        "Unión Europea (Jugador B)"
+      ],
+      "period": "2021-01-01 / 2026-03-12",
+      "cooperation_threshold_mcm": 250,
+      "threshold_justification": "Mínimo histórico observado durante cumplimiento contractual normal (ene 2021 – feb 2022 = 250.4 mcm/día)",
+      "russia_defection_rules": [
+        "Flujo < 250 mcm/día",
+        "Caída mensual >= 20% respecto a media 30 días anterior"
+      ],
+      "eu_defection_rules": [
+        "Post Feb-2022 AND LNG surge >= 15% mensual",
+        "Post Ene-2025 (REPowerEU independence regulation)"
+      ]
+    }
+  },
+  "technical": {
+    "language": "Python 3.11+",
+    "framework": "Streamlit 1.30+",
+    "key_libraries": {
+      "numpy": ">=1.26.0",
+      "pandas": ">=2.1.0",
+      "plotly": ">=5.18.0",
+      "scipy": ">=1.11.0",
+      "openpyxl": ">=3.1.0"
+    },
+    "deployment": "Streamlit Cloud",
+    "lines_of_code": 2883,
+    "tabs": 8
+  }
+}
