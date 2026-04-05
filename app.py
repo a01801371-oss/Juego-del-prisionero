@@ -1641,7 +1641,9 @@ def render_energy_crisis_tab():
         df_route      = load_route_data()
 
     min_date = df_daily_full["Date"].min().date()
-    max_date = df_daily_full["Date"].max().date()
+    # Limitar al último dato real de Bruegel/ENTSOG (no datos sintéticos)
+    _real_max = pd.Timestamp("2026-03-12").date()
+    max_date  = min(df_daily_full["Date"].max().date(), _real_max)
 
     # 1. Rango de fechas
     st.sidebar.markdown("**📅 Período de simulación**")
@@ -1864,7 +1866,7 @@ def render_energy_crisis_tab():
     # SECCIÓN D: IDENTIFICADOR DE ESTRATEGIA + ANÁLISIS AXELROD
     # ════════════════════════════════════════════════════════
     st.markdown("---")
-    st.markdown("### 🔍Comportamiento Real vs Estrategia más parecida")
+    st.markdown("### 🔍 Análisis Axelrod — Comportamiento Real vs Estrategia más parecida")
     st.caption(
         "Compara la secuencia histórica de movidas de Rusia con las 15 estrategias "
         "del catálogo y muestra cuál se parece más."
