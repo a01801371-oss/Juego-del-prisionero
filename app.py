@@ -1861,6 +1861,81 @@ def render_energy_crisis_tab():
         )
 
     # ════════════════════════════════════════════════════════
+    # SECCIÓN D: IDENTIFICADOR DE ESTRATEGIA + ANÁLISIS AXELROD
+    # ════════════════════════════════════════════════════════
+    st.markdown("---")
+    st.markdown("### 🔍 Análisis Axelrod — Comportamiento Real vs Estrategia más parecida")
+    st.caption(
+        "Compara la secuencia histórica de movidas de Rusia con las 15 estrategias "
+        "del catálogo y muestra cuál se parece más."
+    )
+
+    with st.spinner("Analizando…"):
+        detection = identify_strategy(
+            df_daily_full, df_stor_full,
+            flow_thresh=flow_thresh,
+            date_start=date_start,
+            date_end=date_end,
+        )
+
+    if detection["n_days"] > 0:
+        det1, det2, det3 = st.columns(3)
+        for _col, (_sn, _pct), _lbl in zip(
+            [det1, det2, det3],
+            detection["top3"],
+            ["🥇 Más parecida", "🥈 Segunda", "🥉 Tercera"],
+        ):
+            _col.metric(_lbl, _sn, f"{_pct:.1f}% coincidencia")
+
+        _bn, _bp = detection["best"], detection["best_pct"]
+        _bc   = _GAS if _bp >= 70 else (_EU if _bp >= 55 else "#94a3b8")
+        _conf = "Alta ✅" if _bp >= 70 else ("Media ⚠️" if _bp >= 55 else "Baja ❌")
+
+        # Cuadro comparativo Comportamiento Real vs Axelrod
+        st.markdown(f"""
+        <div style="background:rgba(251,191,36,0.07);
+                    border:1px solid rgba(251,191,36,0.22);
+                    border-radius:6px;padding:14px 20px;margin:10px 0;">
+          <div style="display:flex;gap:40px;align-items:center;">
+            <div>
+              <p style="font-size:9px;letter-spacing:.12em;color:#64748b;
+                        text-transform:uppercase;margin:0 0 4px 0;">Comportamiento Real</p>
+              <p style="font-size:15px;font-weight:700;color:#e2e8f0;margin:0;">
+                Rusia — datos CSV
+              </p>
+              <p style="font-size:11px;color:#64748b;margin:3px 0 0 0;">
+                {coop_ru:.1f}% cooperación · {detection["n_days"]:,} días analizados
+              </p>
+            </div>
+            <div style="font-size:20px;color:#64748b;">≈</div>
+            <div>
+              <p style="font-size:9px;letter-spacing:.12em;color:#64748b;
+                        text-transform:uppercase;margin:0 0 4px 0;">
+                Estrategia Axelrod más parecida
+              </p>
+              <p style="font-size:15px;font-weight:700;color:{_bc};margin:0;">
+                {_bn}
+              </p>
+              <p style="font-size:11px;color:#64748b;margin:3px 0 0 0;">
+                {_bp:.1f}% coincidencia · Confianza: {_conf}
+              </p>
+            </div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.plotly_chart(fig_strategy_detection(detection), use_container_width=True)
+
+        with st.expander("ℹ️ Metodología de detección", expanded=False):
+            st.markdown("""
+            1. Se extrae la secuencia histórica de Rusia: **C** si flujo > umbral y sin caída ≥20 %, **D** en caso contrario.
+            2. Cada una de las 15 estrategias del catálogo juega contra la señal histórica de la UE (almacenamiento semanal).
+            3. Se calcula qué porcentaje de días la estrategia habría tomado la **misma decisión** que Rusia.
+            4. Alta confianza ≥ 70 % · Media 55–70 % · Baja < 55 %.
+            > Similitud de movidas ≠ intención estratégica. Alta coincidencia con ALL-D en períodos de cortes puede reflejar restricciones técnicas o políticas, no una estrategia deliberada.
+            """)
+
+    # ════════════════════════════════════════════════════════
     # ════════════════════════════════════════════════════════
     # SECCIÓN AXELROD-HAMILTON: VALIDACIÓN EMPÍRICA
     # ════════════════════════════════════════════════════════
@@ -1964,81 +2039,6 @@ def render_energy_crisis_tab():
             sobre la evolución de la cooperación en sistemas con sombra del futuro alta.
             """)
 
-    # SECCIÓN D: IDENTIFICADOR DE ESTRATEGIA + ANÁLISIS AXELROD
-    # ════════════════════════════════════════════════════════
-    st.markdown("---")
-    st.markdown("### 🔍 Análisis Axelrod — Comportamiento Real vs Estrategia más parecida")
-    st.caption(
-        "Compara la secuencia histórica de movidas de Rusia con las 15 estrategias "
-        "del catálogo y muestra cuál se parece más."
-    )
-
-    with st.spinner("Analizando…"):
-        detection = identify_strategy(
-            df_daily_full, df_stor_full,
-            flow_thresh=flow_thresh,
-            date_start=date_start,
-            date_end=date_end,
-        )
-
-    if detection["n_days"] > 0:
-        det1, det2, det3 = st.columns(3)
-        for _col, (_sn, _pct), _lbl in zip(
-            [det1, det2, det3],
-            detection["top3"],
-            ["🥇 Más parecida", "🥈 Segunda", "🥉 Tercera"],
-        ):
-            _col.metric(_lbl, _sn, f"{_pct:.1f}% coincidencia")
-
-        _bn, _bp = detection["best"], detection["best_pct"]
-        _bc   = _GAS if _bp >= 70 else (_EU if _bp >= 55 else "#94a3b8")
-        _conf = "Alta ✅" if _bp >= 70 else ("Media ⚠️" if _bp >= 55 else "Baja ❌")
-
-        # Cuadro comparativo Comportamiento Real vs Axelrod
-        st.markdown(f"""
-        <div style="background:rgba(251,191,36,0.07);
-                    border:1px solid rgba(251,191,36,0.22);
-                    border-radius:6px;padding:14px 20px;margin:10px 0;">
-          <div style="display:flex;gap:40px;align-items:center;">
-            <div>
-              <p style="font-size:9px;letter-spacing:.12em;color:#64748b;
-                        text-transform:uppercase;margin:0 0 4px 0;">Comportamiento Real</p>
-              <p style="font-size:15px;font-weight:700;color:#e2e8f0;margin:0;">
-                Rusia — datos CSV
-              </p>
-              <p style="font-size:11px;color:#64748b;margin:3px 0 0 0;">
-                {coop_ru:.1f}% cooperación · {detection["n_days"]:,} días analizados
-              </p>
-            </div>
-            <div style="font-size:20px;color:#64748b;">≈</div>
-            <div>
-              <p style="font-size:9px;letter-spacing:.12em;color:#64748b;
-                        text-transform:uppercase;margin:0 0 4px 0;">
-                Estrategia Axelrod más parecida
-              </p>
-              <p style="font-size:15px;font-weight:700;color:{_bc};margin:0;">
-                {_bn}
-              </p>
-              <p style="font-size:11px;color:#64748b;margin:3px 0 0 0;">
-                {_bp:.1f}% coincidencia · Confianza: {_conf}
-              </p>
-            </div>
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.plotly_chart(fig_strategy_detection(detection), use_container_width=True)
-
-        with st.expander("ℹ️ Metodología de detección", expanded=False):
-            st.markdown("""
-            1. Se extrae la secuencia histórica de Rusia: **C** si flujo > umbral y sin caída ≥20 %, **D** en caso contrario.
-            2. Cada una de las 15 estrategias del catálogo juega contra la señal histórica de la UE (almacenamiento semanal).
-            3. Se calcula qué porcentaje de días la estrategia habría tomado la **misma decisión** que Rusia.
-            4. Alta confianza ≥ 70 % · Media 55–70 % · Baja < 55 %.
-            > Similitud de movidas ≠ intención estratégica. Alta coincidencia con ALL-D en períodos de cortes puede reflejar restricciones técnicas o políticas, no una estrategia deliberada.
-            """)
-
-    # ════════════════════════════════════════════════════════
     # SECCIÓN E: DESCARGA
     # ════════════════════════════════════════════════════════
     st.markdown("---")
