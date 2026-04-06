@@ -2674,13 +2674,14 @@ def main():
             st.success("✅ Torneo completado.")
 
     # ── Tabs ──────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
         "🏆 Ranking",
         "🌡️ Heatmap",
         "⚔️ Head-to-Head",
         "📊 Distribución",
         "ℹ️ Estrategias",
         "🧪 Análisis Estadístico",
+        "📄 Paper Original",
         "⚡ Crisis Energética Rusia–UE",
         "🔬 Anexo: Tests RNG",
     ])
@@ -2872,12 +2873,67 @@ def main():
     with tab6:
         tab_statistics()
 
-    # ── Tab 7: Crisis Energética Rusia–UE ────────────────────────
+    # ── Tab 7: Paper Original Axelrod & Hamilton (1981) ──────────
     with tab7:
+        st.markdown("### 📄 Paper Original — Axelrod & Hamilton (1981)")
+        st.markdown("""
+        <div style="background:rgba(14,20,45,0.8);border:1px solid rgba(56,189,248,0.20);
+                    border-radius:6px;padding:16px 20px;margin-bottom:16px;">
+          <p style="font-size:10px;letter-spacing:.14em;color:#475569;
+                    text-transform:uppercase;margin:0 0 6px 0;">
+            Fuente primaria del proyecto
+          </p>
+          <p style="font-size:16px;font-weight:700;color:#e2e8f0;margin:0 0 4px 0;">
+            The Evolution of Cooperation
+          </p>
+          <p style="font-size:12px;color:#94a3b8;margin:0 0 2px 0;">
+            Robert Axelrod & William D. Hamilton
+          </p>
+          <p style="font-size:11px;color:#64748b;margin:0;">
+            <em>Science</em>, Vol. 211, No. 4489 · 27 March 1981 · pp. 1390–1396
+          </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        col_info, col_btn = st.columns([2, 1])
+        with col_info:
+            st.markdown("""
+            **Hallazgos principales del paper:**
+            - TIT FOR TAT ganó los dos torneos de Dilema del Prisionero Iterado
+            - La estrategia ganadora es la más simple: cooperar primero, luego copiar
+            - TFT es evolutivamente estable cuando w ≥ (T−R)/(T−P) ≈ 0.5
+            - La cooperación puede emerger entre agentes egoístas sin autoridad central
+            - Aplicaciones: biología evolutiva, economía, relaciones internacionales
+            """)
+            st.markdown("""
+            <p style="font-size:11px;color:#475569;font-style:italic;">
+            DOI: 10.1126/science.7466396 · JSTOR: 1685895
+            </p>
+            """, unsafe_allow_html=True)
+
+        with col_btn:
+            try:
+                with open("Axelrod_Hamilton81.pdf", "rb") as _pdf_f:
+                    _pdf_bytes = _pdf_f.read()
+                st.download_button(
+                    label="⬇ Descargar PDF",
+                    data=_pdf_bytes,
+                    file_name="Axelrod_Hamilton_1981_Evolution_of_Cooperation.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
+            except FileNotFoundError:
+                st.info(
+                    "Sube `Axelrod_Hamilton81.pdf` a la raíz del repositorio "
+                    "para habilitar la descarga."
+                )
+
+    # ── Tab 8: Crisis Energética Rusia–UE ────────────────────────
+    with tab8:
         render_energy_crisis_tab()
 
-    # ── Tab 8: Anexo Tests RNG ────────────────────────────────
-    with tab8:
+    # ── Tab 9: Anexo Tests RNG ────────────────────────────────
+    with tab9:
         tab_rng_tests()
 
 
