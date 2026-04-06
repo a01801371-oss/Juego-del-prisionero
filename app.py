@@ -2913,7 +2913,7 @@ def main():
 
         with col_btn:
             try:
-                with open("Axelrod_Hamilton81.pdf", "rb") as _pdf_f:
+                with open("Axelrod&Hamilton81.pdf", "rb") as _pdf_f:
                     _pdf_bytes = _pdf_f.read()
                 st.download_button(
                     label="⬇ Descargar PDF",
